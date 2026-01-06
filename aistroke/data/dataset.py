@@ -45,8 +45,11 @@ class BucketBatchSampler(Sampler):
 		self.batch_size = batch_size
 		self.drop_last = drop_last
 		self.shuffle = shuffle
+
+		first_sample = dataset[0][4]
+		self.first_modality = next(iter(first_sample.keys()))
 		# 用左臂角度序列长度做排序示例
-		self.lengths = [d[4]["left_arm_angle"].shape[0] for d in dataset]
+		self.lengths = [d[4][self.first_modality].shape[0] for d in dataset]
 		self.bins = np.argsort(self.lengths)
 
 	def __iter__(self):
@@ -75,7 +78,7 @@ def label_collate_fn(batch):
 	sample_results = batch[0][4]
 	modalities = list(sample_results.keys())
 
-	max_len = max(b[4]["left_arm_angle"].shape[0] for b in batch)
+	max_len = max(b[4][modalities[0]].shape[0] for b in batch)
 
 	batch_tensors = {}
 	for m in modalities:
@@ -87,7 +90,7 @@ def label_collate_fn(batch):
 	huanz_ids = []
 
 	for i, s in enumerate(batch):
-		seq_len = s[4]["left_arm_angle"].shape[0]
+		seq_len = s[4][modalities[0]].shape[0]
 		for m in modalities:
 			batch_tensors[m][i, :seq_len, ...] = s[4][m]
 
@@ -105,16 +108,21 @@ def label_collate_fn(batch):
 	)
 
 def build_dataloaders(cfg, train_idx, val_idx, test_idx, raw_data, device):
-	train_dataset = LabelAngleDataset(cfg, "train", train_idx, raw_data, device)
-	val_dataset = LabelAngleDataset(cfg, "val", val_idx, raw_data, device)
-	test_dataset = LabelAngleDataset(cfg, "test", test_idx, raw_data, device)
-
-	train_sampler = BucketBatchSampler(train_dataset, batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=True)
-	val_sampler = BucketBatchSampler(val_dataset, batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=False)
-	test_sampler = BucketBatchSampler(test_dataset, batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=False)
-
-	train_loader = DataLoader(train_dataset, batch_sampler=train_sampler, collate_fn=label_collate_fn, pin_memory=True)
-	val_loader = DataLoader(val_dataset, batch_sampler=val_sampler, collate_fn=label_collate_fn, pin_memory=True)
-	test_loader = DataLoader(test_dataset, batch_sampler=test_sampler, collate_fn=label_collate_fn, pin_memory=True)
+	train_loader = None
+	val_loader = None
+	test_loader = None
+		
+	if train_idx != []:
+		train_dataset = LabelAngleDataset(cfg, "train", train_idx, raw_data, device)
+		train_sampler = BucketBatchSampler(train_dataset, batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=True)
+		train_loader = DataLoader(train_dataset, batch_sampler=train_sampler, collate_fn=label_collate_fn, pin_memory=True)
+	if val_idx != []:
+		val_dataset = LabelAngleDataset(cfg, "val", val_idx, raw_data, device)
+		val_sampler = BucketBatchSampler(val_dataset, batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=False)
+		val_loader = DataLoader(val_dataset, batch_sampler=val_sampler, collate_fn=label_collate_fn, pin_memory=True)
+	if test_idx != []:
+		test_dataset = LabelAngleDataset(cfg, "test", test_idx, raw_data, device)
+		test_sampler = BucketBatchSampler(test_dataset, batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=False)
+		test_loader = DataLoader(test_dataset, batch_sampler=test_sampler, collate_fn=label_collate_fn, pin_memory=True)
 
 	return train_loader, val_loader, test_loader
