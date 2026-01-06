@@ -100,6 +100,7 @@ class MyNet(nn.Module):
                 nn.init.constant_(m.weight, 1.0)
 
     def forward(self, inputs):
+        node_tokens = None
         token_parts = []  # list of (B, S_i, E)
 
         # ---- skeleton tokens ----
@@ -108,7 +109,6 @@ class MyNet(nn.Module):
             B = sk.shape[0]
             node_tokens = self.skeleton_tokenizer(sk)  # (B, V, E)
             node_tokens = node_tokens * (torch.sigmoid(self.skeleton_gate) * 1.2)
-            token_parts.append(node_tokens)
 
         # ---- other modalities ----
         if len(self.non_skel_names) > 0:
@@ -125,9 +125,17 @@ class MyNet(nn.Module):
                 t = t * gates[i]
                 token_parts.append(t)
 
-        tokens = torch.cat(token_parts, dim=1)
-        fused, _ = self.fusion_attn(tokens, tokens, tokens)
-        fused = tokens + fused
+        if node_tokens is not None and token_parts != []:
+            tokens = torch.cat(token_parts, dim=1)
+            fused, _ = self.fusion_attn(node_tokens, tokens, tokens)
+            fused = node_tokens + fused
+        elif node_tokens is not None and token_parts == []:
+            fused, _ = self.fusion_attn(node_tokens, node_tokens, node_tokens)
+            fused = node_tokens + fused
+        elif node_tokens is None and token_parts != []:
+            tokens = torch.cat(token_parts, dim=1)
+            fused, _ = self.fusion_attn(tokens, tokens, tokens)
+            fused = tokens + fused
 
         # queries attend to fused tokens
         q_left = self.query_left.expand(B, -1, -1)    # (B,1,E)

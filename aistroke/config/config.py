@@ -11,7 +11,7 @@ cfg.PROJECT_ROOT = ""
 cfg.OUTER_FOLDS = 10
 cfg.INNER_FOLDS = 9
 cfg.SPLIT_RATIO = [80, 10, 10]
-cfg.USE_STAGE1 = False
+cfg.USE_STAGE1 = True
 
 # 路径配置
 cfg.PATH = CN()
@@ -21,7 +21,7 @@ cfg.PATH.RAW_LABEL_DATA_PATH = "raw_data_generate/raw_label_data_clipped_byaudio
 cfg.TRAIN = CN()
 cfg.TRAIN.BATCH_SIZE = 16
 cfg.TRAIN.EPOCH = 500
-cfg.TRAIN.LR = 1e-5
+cfg.TRAIN.LR = 1e-4
 cfg.TRAIN.WEIGHT_DECAY = cfg.TRAIN.LR * 0.1
 cfg.TRAIN.T_MAX = 1000
 
