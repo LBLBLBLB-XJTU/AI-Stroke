@@ -11,7 +11,7 @@ cfg.PROJECT_ROOT = ""
 cfg.OUTER_FOLDS = 10
 cfg.INNER_FOLDS = 9
 cfg.SPLIT_RATIO = [80, 10, 10]
-cfg.USE_STAGE1 = True
+cfg.USE_STAGE1 = False
 
 # 路径配置
 cfg.PATH = CN()
@@ -20,7 +20,7 @@ cfg.PATH.RAW_LABEL_DATA_PATH = "raw_data_generate/raw_label_data_clipped_byaudio
 # 训练参数
 cfg.TRAIN = CN()
 cfg.TRAIN.BATCH_SIZE = 16
-cfg.TRAIN.EPOCH = 1
+cfg.TRAIN.EPOCH = 500
 cfg.TRAIN.LR = 1e-4
 cfg.TRAIN.WEIGHT_DECAY = cfg.TRAIN.LR * 0.1
 cfg.TRAIN.T_MAX = 1000
@@ -59,7 +59,7 @@ cfg.MODEL.MODALITIES_DIMS = (
     1,
     1
 )
-cfg.MODEL.MODALITIES_USED_IDX = [0, 1, 2] # 确定
+cfg.MODEL.MODALITIES_USED_IDX = [0, 3] # 确定
 # 模型参数
 cfg.MODEL.EMBED_DIM = 256
 cfg.MODEL.TRANSFORMER_LAYERS = 3

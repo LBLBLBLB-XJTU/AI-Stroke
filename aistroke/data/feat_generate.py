@@ -99,6 +99,10 @@ def generate_feat(cfg, joints, device, modalities_used):
         results["right_arm_angle"] = compute_limbs_angle_batch(joints_all[:,17], joints_all[:,19], joints_all[:,2], joints_all[:,17])
 
     if "diff" in modalities_used:
+        if "left_arm_angle" not in results.keys():
+            results["left_arm_angle"] = compute_limbs_angle_batch(joints_all[:,16], joints_all[:,18], joints_all[:,1], joints_all[:,16])
+        if "right_arm_angle" not in results.keys():
+            results["right_arm_angle"] = compute_limbs_angle_batch(joints_all[:,17], joints_all[:,19], joints_all[:,2], joints_all[:,17])
         results["diff"] = torch.abs(results["left_arm_angle"] - results["right_arm_angle"])
 
     # 检查所有第一维 T 是否一致
