@@ -15,12 +15,11 @@ from utils.logger import setup_logger, log_scalars
 from data.dataset import build_dataloaders
 from model.MyNet import MyNet
 from model.loss import Losses
-from utils.engine import run_one_epoch_cosface, run_one_epoch_cosface_twostage
+from utils.engine import run_one_epoch_cosface
 
-from stage1_rule_check import stage1_rule_check_test
+from stage1 import stage1_train, stage1_test
 
-CLIPPED_DATA_PATH = osp.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "raw_data_generate", "raw_label_data_clipped.pkl")
-
+CLIPPED_DATA_PATH = osp.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "raw_data_generate", "raw_label_data_clipped_byaudio.pkl")
 # 项目路径
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 sys.path.append(PROJECT_ROOT)
@@ -42,26 +41,14 @@ def main():
 	logger.info(f"配置：{cfg}")
 
 	# 加载数据
-	# raw_path = os.path.join(cfg.PROJECT_ROOT, cfg.PATH.RAW_LABEL_DATA_PATH)
-	# raw_data = joblib.load(raw_path)
-	# mx_wrong = stage1_rule_check()
-	# data = joblib.load(CLIPPED_DATA_PATH)
-	# data_filtered = []
-	# for sample in data:
-	# 	if sample["id"] not in mx_wrong[2]: # []
-	# 		data_filtered.append(sample)
-	# raw_data = data_filtered
-	raw_data = joblib.load(CLIPPED_DATA_PATH)
+	raw_path = os.path.join(os.path.dirname(cfg.PROJECT_ROOT), cfg.PATH.RAW_LABEL_DATA_PATH)
+	raw_data = joblib.load(raw_path)
 	labels = [d["total_label"] for d in raw_data]
 
 	# 外层 fold: 测试
 	skf_outer = StratifiedKFold(n_splits=cfg.OUTER_FOLDS, shuffle=True, random_state=cfg.SEED_VALUE)
 	outer_fold_acc = []
 	outer_fold_net_acc = []
-	# ⭐ 全局最佳模型（基于 outer test）
-	global_best_acc = -1.0
-	global_best_ckpt = os.path.join(log_dir, "global_best_model.pth")
-	global_best_info = {}
 
 	warmup_epochs = 15
 	lr_max = cfg.TRAIN.LR
@@ -71,6 +58,9 @@ def main():
 		logger.info(f"===== Outer Fold {outer_fold} =====")
 		outer_fold_dir = os.path.join(log_dir, f"fold{outer_fold}")
 		os.makedirs(outer_fold_dir, exist_ok=True)
+
+		best_params = stage1_train(outer_trainval_idx, raw_data)
+		logger.info(f"stage1参数选择：{best_params}")
 
 		outer_trainval_idx = list(outer_trainval_idx)
 		outer_test_idx = list(outer_test_idx)
@@ -90,13 +80,11 @@ def main():
 
 			inner_train_idx = [outer_trainval_idx[i] for i in inner_train_idx]
 			inner_val_idx = [outer_trainval_idx[i] for i in inner_val_idx]
-			# 训练时可以纯净
-			stage1_correct_i_train, id_needed_net_i_trian, class_1_idx_train = stage1_rule_check_test(inner_train_idx, raw_data)
-			stage1_correct_i_val, id_needed_net_i_val, class_1_idx_val = stage1_rule_check_test(inner_val_idx, raw_data) 
+
 			train_loader, val_loader, _ = build_dataloaders(
 				cfg,
-				train_idx=class_1_idx_train,
-				val_idx=class_1_idx_val,
+				train_idx=inner_train_idx,
+				val_idx=inner_val_idx,
 				test_idx=[],
 				raw_data=raw_data,
 				device=device
@@ -155,12 +143,16 @@ def main():
 				logger.info(f"🔥 更新外层最佳内层模型：{inner_best_model}，acc={inner_best_val_acc:.4f}")
 
 		# 外层测试
-		stage1_correct, id_needed_net, _ = stage1_rule_check_test(outer_test_idx, raw_data)
+		if cfg.USE_STAGE1:
+			stage1_correct, idx_needed_net= stage1_test(outer_test_idx, raw_data, best_params)
+		else:
+			stage1_correct = 0
+			idx_needed_net = outer_test_idx
 		train_loader, val_loader, test_loader = build_dataloaders(
 				cfg,
-				train_idx=outer_trainval_idx,
+				train_idx=[],
 				val_idx=[],
-				test_idx=id_needed_net,
+				test_idx=idx_needed_net,
 				raw_data=raw_data,
 				device=device
 			)
@@ -170,34 +162,18 @@ def main():
 		net.load_state_dict(checkpoint["model_state_dict"])
 		criterion = Losses(cfg)
 
-		test_results = run_one_epoch_cosface_twostage(net, test_loader, device, criterion, mode="test", save_dir=outer_fold_dir)
+		test_results = run_one_epoch_cosface(net, test_loader, device, criterion, mode="test", save_dir=outer_fold_dir)
 		stage2_correct = test_results["correct_stage2"]
 
 		final_acc = (stage1_correct + stage2_correct) / len(outer_test_idx)
 		net_acc = test_results["final_acc"]
 		
-		logger.info(f"Outer Fold {outer_fold} 的正确率为:")
+		logger.info(f"Outer Fold {outer_fold} 的全系统正确率为:")
 		logger.info(f"{final_acc}")
+		logger.info(f"Outer Fold {outer_fold} 的网络正确率为")
+		logger.info(f"{net_acc}")
 		outer_fold_acc.append(final_acc)
 		outer_fold_net_acc.append(net_acc)
-
-		# ⭐ 更新全局最佳模型（基于 outer test acc）
-		if final_acc > global_best_acc + 1e-6:
-			global_best_acc = final_acc
-
-			torch.save({
-				"model_state_dict": net.state_dict(),
-				"test_acc": global_best_acc,
-				"outer_fold": outer_fold,
-				"inner_best_val_acc": inner_best_val_acc,
-				"inner_best_model": inner_best_model,
-				"cfg": cfg
-			}, global_best_ckpt)
-
-			logger.info(
-				f"🏆 更新全局最佳模型！acc={global_best_acc:.4f}，"
-				f"outer_fold={outer_fold}"
-			)
 
 	avg_acc = sum(outer_fold_acc) / len(outer_fold_acc)
 	avg_net_acc = sum(outer_fold_net_acc) / len(outer_fold_net_acc)
@@ -205,8 +181,6 @@ def main():
 	logger.info(f"所有折的网络测试结果{outer_fold_net_acc} =====")
 	logger.info(f"===== 双重交叉平均最终测试准确率: {avg_acc:.4f} =====")
 	logger.info(f"===== 双重交叉平均最终测试网络准确率: {avg_net_acc:.4f} =====")
-	logger.info(f"🏆 全局最佳模型路径: {global_best_ckpt}")
-	logger.info(f"🏆 全局最佳测试准确率: {global_best_acc:.4f}")
 
 if __name__ == "__main__":
 	main()

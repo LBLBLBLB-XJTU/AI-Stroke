@@ -30,13 +30,7 @@ class LabelAngleDataset(Dataset):
 		sample = self.data[idx]
 		
 		huanz_id = sample["id"]
-		if self.cfg.MODEL.USE_CLIPPED:
-			if sample["clip_range"][2] == 0:
-				joints = sample["joints"]
-			else:
-				joints = sample["joints_clipped"]
-		else:
-			joints = sample["joints"]
+		joints = sample["joints"]
 
 		joints_aug = joints_augment(joints, self.cfg)
 		feats = generate_feat(self.cfg, joints_aug, self.device, self.modalities_used)

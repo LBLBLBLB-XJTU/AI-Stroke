@@ -98,6 +98,9 @@ def generate_feat(cfg, joints, device, modalities_used):
     if "right_arm_angle" in modalities_used:
         results["right_arm_angle"] = compute_limbs_angle_batch(joints_all[:,17], joints_all[:,19], joints_all[:,2], joints_all[:,17])
 
+    if "diff" in modalities_used:
+        results["diff"] = torch.abs(results["left_arm_angle"] - results["right_arm_angle"])
+
     # 检查所有第一维 T 是否一致
     t_sizes = [v.shape[0] for v in results.values()]
     assert len(set(t_sizes)) == 1 and t_sizes[0] == T, f"results 中 tensor 第一维 (T) 不一致: {t_sizes}"

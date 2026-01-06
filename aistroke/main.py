@@ -16,9 +16,8 @@ from model.MyNet import MyNet
 from model.loss import Losses
 from utils.engine import run_one_epoch_cosface
 
-from stage1_rule_check import stage1_rule_check
+from stage1 import stage1_test, stage1_train
 
-CLIPPED_DATA_PATH = osp.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "raw_data_generate", "raw_label_data_clipped.pkl")
 # 项目路径
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 sys.path.append(PROJECT_ROOT)
@@ -40,22 +39,16 @@ def main():
     logger.info(f"配置：{cfg}")
 
     # 加载数据
-    # raw_path = os.path.join(cfg.PROJECT_ROOT, cfg.PATH.RAW_LABEL_DATA_PATH)
-    # raw_data = joblib.load(raw_path)
-    # labels = [d["total_label"] for d in raw_data]
-    mx_wrong = stage1_rule_check()
-    data = joblib.load(CLIPPED_DATA_PATH)
-    data_filtered = []
-    for sample in data:
-        if sample["id"] not in mx_wrong[1]:
-            data_filtered.append(sample)
-    raw_data = data_filtered
+    raw_path = os.path.join(os.path.dirname(cfg.PROJECT_ROOT), cfg.PATH.RAW_LABEL_DATA_PATH)
+    raw_data = joblib.load(raw_path)
     labels = [d["total_label"] for d in raw_data]
 
     # 简单划分 train/val/test (比如 70%/15%/15%)
     train_val_idx, test_idx = train_test_split(
         np.arange(len(labels)), test_size=cfg.SPLIT_RATIO[2] / sum(cfg.SPLIT_RATIO), stratify=labels, random_state=cfg.SEED_VALUE
     )
+    best_params = stage1_train(train_val_idx, raw_data)
+    logger.info(f"stage1参数选择：{best_params}")
     train_idx, val_idx = train_test_split(
         train_val_idx, test_size=cfg.SPLIT_RATIO[1] / (cfg.SPLIT_RATIO[0] + cfg.SPLIT_RATIO[1]),
         stratify=[labels[i] for i in train_val_idx],
@@ -71,8 +64,7 @@ def main():
         # train_idx=np.concatenate([train_idx, val_idx, test_idx]),
         val_idx=val_idx,
         # val_idx=np.concatenate([train_idx, val_idx, test_idx]),
-        test_idx=test_idx,
-        # test_idx=np.concatenate([train_idx, val_idx, test_idx]),
+        test_idx=[],
         raw_data=raw_data,
         device=device
     )
@@ -92,7 +84,6 @@ def main():
     logger.info(f"criterion: {criterion}")
 
     writer = SummaryWriter(log_dir=log_dir)
-    lowest_loss = 100
     best_acc = 0.0
     ckpt_path = os.path.join(log_dir, "best_model.pth")
 
@@ -124,10 +115,31 @@ def main():
     writer.close()
 
     # 测试
+    if cfg.USE_STAGE1:
+        stage1_correct, idx_needed_net= stage1_test(test_idx, raw_data, best_params)
+    else:
+        stage1_correct = 0
+        idx_needed_net = test_idx
+    train_loader, val_loader, test_loader = build_dataloaders(
+				cfg,
+				train_idx=[],
+				val_idx=[],
+                test_idx=idx_needed_net,
+				raw_data=raw_data,
+				device=device
+			)
+    
     checkpoint = torch.load(ckpt_path, map_location=device)
     net.load_state_dict(checkpoint["model_state_dict"])
+
     test_results  = run_one_epoch_cosface(net, test_loader, device, criterion, mode="test", save_dir=log_dir)
-    logger.info(f"测试结果: {test_results}")
+    stage2_correct = test_results["correct_stage2"]
+
+    final_acc = (stage1_correct + stage2_correct) / len(test_idx)
+    net_acc = test_results["final_acc"]
+
+    logger.info(f"全系统测试结果: {final_acc}")
+    logger.info(f"网络测试结果: {net_acc}")
     log_scalars(None, logger, "Test", test_results, "final")
 
 if __name__ == "__main__":

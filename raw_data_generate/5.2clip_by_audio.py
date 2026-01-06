@@ -1,3 +1,4 @@
+# 现在使用的，使用音频切割出对应的分段，从而可以避免自取区域
 import joblib
 import numpy as np
 import os
@@ -60,10 +61,10 @@ def clip_samples_by_angles():
             if info["id"] == sample['id']:
                 segment = (int(round(info["start"])), int(round(info["end"])))
 
-                img_dir = osp.join("/home/liu_bang/angle_img_audio", sample['id'])
-                os.makedirs(img_dir, exist_ok=True)
-                plot_angle_with_segment(sample["left_arm_angles"], segment, save_path=osp.join(img_dir, f"plot_left.png"), title=f"Left arm ({sample['id']})")
-                plot_angle_with_segment(sample["right_arm_angles"], segment, save_path=osp.join(img_dir, f"plot_right.png"), title=f"Right arm ({sample['id']})")
+                # img_dir = osp.join("/home/liu_bang/angle_img_audio", sample['id'])
+                # os.makedirs(img_dir, exist_ok=True)
+                # plot_angle_with_segment(sample["left_arm_angles"], segment, save_path=osp.join(img_dir, f"plot_left.png"), title=f"Left arm ({sample['id']})")
+                # plot_angle_with_segment(sample["right_arm_angles"], segment, save_path=osp.join(img_dir, f"plot_right.png"), title=f"Right arm ({sample['id']})")
                 start, end = segment
 
                 # clip joints 与 angle

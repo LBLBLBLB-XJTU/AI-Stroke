@@ -11,26 +11,22 @@ cfg.PROJECT_ROOT = ""
 cfg.OUTER_FOLDS = 10
 cfg.INNER_FOLDS = 9
 cfg.SPLIT_RATIO = [80, 10, 10]
-cfg.CV_INNER_SPLIT = 0.8
+cfg.USE_STAGE1 = False
 
 # 路径配置
 cfg.PATH = CN()
-cfg.PATH.RAW_LABEL_DATA_PATH = "data/raw_data/raw_label_data.pkl"
+cfg.PATH.RAW_LABEL_DATA_PATH = "raw_data_generate/raw_label_data_clipped_byaudio.pkl"
 
 # 训练参数
 cfg.TRAIN = CN()
 cfg.TRAIN.BATCH_SIZE = 16
 cfg.TRAIN.EPOCH = 500
-cfg.TRAIN.LR = 1e-5
-# cfg.TRAIN.WEIGHT_DECAY = 1e-5
+cfg.TRAIN.LR = 1e-4
 cfg.TRAIN.WEIGHT_DECAY = cfg.TRAIN.LR * 0.1
 cfg.TRAIN.T_MAX = 1000
 
 # 数据参数
 cfg.DATA = CN() 
-cfg.DATA.CWT_SCALES = [1, 17]
-cfg.DATA.CWT_SCALES_NUMS = 8
-cfg.DATA.DWT_LEVEL = 3
 cfg.DATA.AUGMENT = CN()
 cfg.DATA.AUGMENT.AUGMENT_PROB = 0
 cfg.DATA.AUGMENT.NOISE_STD = 0.01
@@ -51,18 +47,19 @@ cfg.LOSS.TRIPLET_MARGIN = 0.3
 # 模型参数
 cfg.MODEL = CN()
 # 模态选择
-cfg.MODEL.USE_CLIPPED = True
 cfg.MODEL.MODALITIES_NAMES = (
     "joints", 
     "left_arm_angle", 
     "right_arm_angle",
+    "diff"
 )
 cfg.MODEL.MODALITIES_DIMS = (
     48,  
     1, 
     1,
+    1
 )
-cfg.MODEL.MODALITIES_USED_IDX = [0, 1, 2] # 确定
+cfg.MODEL.MODALITIES_USED_IDX = [0, 1, 2, 3] # 确定
 # 模型参数
 cfg.MODEL.EMBED_DIM = 256
 cfg.MODEL.TRANSFORMER_LAYERS = 3
