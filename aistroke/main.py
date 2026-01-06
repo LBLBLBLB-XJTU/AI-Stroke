@@ -1,5 +1,4 @@
 import os
-import os.path as osp
 import sys
 import time
 import joblib
@@ -60,7 +59,6 @@ def main():
     train_loader, val_loader, test_loader = build_dataloaders(
         cfg,
         train_idx=train_idx,
-        # debug
         # train_idx=np.concatenate([train_idx, val_idx, test_idx]),
         val_idx=val_idx,
         # val_idx=np.concatenate([train_idx, val_idx, test_idx]),

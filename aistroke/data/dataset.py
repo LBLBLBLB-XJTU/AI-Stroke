@@ -3,7 +3,6 @@ from torch.utils.data import Dataset, DataLoader, Sampler
 import numpy as np
 from .data_augment import joints_augment
 from .feat_generate import generate_feat
-from pytorch_wavelets import DWT1DForward
 
 class LabelAngleDataset(Dataset):
 	def __init__(self, cfg, mode, indices, raw_data, device):
@@ -47,7 +46,7 @@ class BucketBatchSampler(Sampler):
 		self.drop_last = drop_last
 		self.shuffle = shuffle
 		# 用左臂角度序列长度做排序示例
-		self.lengths = [d[4]["joints"].shape[0] for d in dataset]
+		self.lengths = [d[4]["left_arm_angle"].shape[0] for d in dataset]
 		self.bins = np.argsort(self.lengths)
 
 	def __iter__(self):
@@ -76,7 +75,7 @@ def label_collate_fn(batch):
 	sample_results = batch[0][4]
 	modalities = list(sample_results.keys())
 
-	max_len = max(b[4]["joints"].shape[0] for b in batch)
+	max_len = max(b[4]["left_arm_angle"].shape[0] for b in batch)
 
 	batch_tensors = {}
 	for m in modalities:
@@ -88,7 +87,7 @@ def label_collate_fn(batch):
 	huanz_ids = []
 
 	for i, s in enumerate(batch):
-		seq_len = s[4]["joints"].shape[0]
+		seq_len = s[4]["left_arm_angle"].shape[0]
 		for m in modalities:
 			batch_tensors[m][i, :seq_len, ...] = s[4][m]
 

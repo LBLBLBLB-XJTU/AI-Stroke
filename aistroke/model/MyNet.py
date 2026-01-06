@@ -1,11 +1,9 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from .modules.TemporalTokenizer import TemporalTokenizer
 from .modules.SkeletonTokenizer import SkeletonTokenizer
 from .modules.CosFaceHead import CosFaceHead
-from .modules.ArcFaceHead import ArcFaceHead
 
 class MyNet(nn.Module):
     def __init__(self, cfg):
@@ -26,7 +24,7 @@ class MyNet(nn.Module):
         self.skel_conv_channels = cfg.MODEL.SKELETON_CONV_CHANNELS
         self.skel_time_pool_to = int(getattr(cfg.MODEL, "SKELETON_TIME_POOL_TO", 32))
 
-        # other config
+        # other modal config
         self.other_conv_channels = cfg.MODEL.OTHER_CONV_CHANNELS
         self.other_time_pool_to = cfg.MODEL.OTHER_TIME_POOL_TO
 
@@ -35,16 +33,17 @@ class MyNet(nn.Module):
         self.face_m = cfg.MODEL.FACE_M
 
         # ---- skeleton-specific tokenizer ----
-        self.skeleton_tokenizer = SkeletonTokenizer(
-            in_channels=self.skel_in_channels,
-            embed_dim=self.embed_dim,
-            num_joints=self.num_joints,
-            conv_channels=self.skel_conv_channels,
-            drop=self.drop,
-            num_heads=self.skel_num_heads,
-            T_pool=self.skel_time_pool_to
-        )
-        self.skeleton_gate = nn.Parameter(torch.tensor(1.0))
+        if self.skeleton_name in self.used_modalities:
+            self.skeleton_tokenizer = SkeletonTokenizer(
+                in_channels=self.skel_in_channels,
+                embed_dim=self.embed_dim,
+                num_joints=self.num_joints,
+                conv_channels=self.skel_conv_channels,
+                drop=self.drop,
+                num_heads=self.skel_num_heads,
+                T_pool=self.skel_time_pool_to
+            )
+            self.skeleton_gate = nn.Parameter(torch.tensor(1.0))
 
         # ---- tokenizers for non-skeleton modalities ----
         self.non_skel_tokenizers = nn.ModuleDict()
@@ -61,8 +60,7 @@ class MyNet(nn.Module):
         self.modality_gate = nn.Parameter(torch.ones(len(self.non_skel_names)) * 1.0)  # length = num non-skel modalities
 
         # ---- fusion transformer ----
-        self.ske_oth_attn = nn.MultiheadAttention(embed_dim=self.embed_dim, num_heads=self.num_heads, batch_first=True, dropout=self.drop)
-        self.oth_oth_attn = nn.MultiheadAttention(embed_dim=self.embed_dim, num_heads=self.num_heads, batch_first=True, dropout=self.drop)
+        self.fusion_attn = nn.MultiheadAttention(embed_dim=self.embed_dim, num_heads=self.num_heads, batch_first=True, dropout=self.drop)
 
         # ---- left/right query heads ----
         self.query_left = nn.Parameter(torch.randn(1, 1, self.embed_dim) * 0.02)
@@ -105,10 +103,12 @@ class MyNet(nn.Module):
         token_parts = []  # list of (B, S_i, E)
 
         # ---- skeleton tokens ----
-        sk = inputs[self.skeleton_name]
-        B = sk.shape[0]
-        node_tokens = self.skeleton_tokenizer(sk)  # (B, V, E)
-        node_tokens = node_tokens * (torch.sigmoid(self.skeleton_gate) * 1.2)
+        if self.skeleton_name in self.used_modalities:
+            sk = inputs[self.skeleton_name]
+            B = sk.shape[0]
+            node_tokens = self.skeleton_tokenizer(sk)  # (B, V, E)
+            node_tokens = node_tokens * (torch.sigmoid(self.skeleton_gate) * 1.2)
+            token_parts.append(node_tokens)
 
         # ---- other modalities ----
         if len(self.non_skel_names) > 0:
@@ -125,12 +125,9 @@ class MyNet(nn.Module):
                 t = t * gates[i]
                 token_parts.append(t)
 
-        # option 1
-        other_tokens = torch.cat(token_parts, dim=1)
-        fused1, _ = self.ske_oth_attn(node_tokens, other_tokens, other_tokens)
-        # fused2, _ = self.ske_oth_attn(other_tokens, node_tokens, node_tokens)
-        # fused = fused1 + fused2
-        fused = node_tokens + fused1
+        tokens = torch.cat(token_parts, dim=1)
+        fused, _ = self.fusion_attn(tokens, tokens, tokens)
+        fused = tokens + fused
 
         # queries attend to fused tokens
         q_left = self.query_left.expand(B, -1, -1)    # (B,1,E)

@@ -21,7 +21,7 @@ cfg.PATH.RAW_LABEL_DATA_PATH = "raw_data_generate/raw_label_data_clipped_byaudio
 cfg.TRAIN = CN()
 cfg.TRAIN.BATCH_SIZE = 16
 cfg.TRAIN.EPOCH = 500
-cfg.TRAIN.LR = 1e-4
+cfg.TRAIN.LR = 1e-5
 cfg.TRAIN.WEIGHT_DECAY = cfg.TRAIN.LR * 0.1
 cfg.TRAIN.T_MAX = 1000
 

@@ -85,9 +85,19 @@ def stage1_train(idx, raw_data):
     min_angle_list = range(5, 50, 1)    # 20,25,...,60
     max_diff_list  = range(0, 30, 1)     # 5,10,...,40
 
+    # plot_threshold_heatmap_save_with_recall(
+    # raw_data, 
+    # class_1_all, 
+    # min_angle_list, 
+    # max_diff_list, 
+    # recall_threshold=0.9,
+    # save_path="threshold_heatmap.png"
+    # )
+
     recall_threshold = 0.90
     best_precision = -1
     best_params = None
+    best_candidates = []
 
     for min_angle in min_angle_list:
         for max_diff in max_diff_list:
@@ -98,12 +108,17 @@ def stage1_train(idx, raw_data):
                     best_precision = precision
                     best_recall = recall
                     best_params = (min_angle, max_diff, best_precision, best_recall)
+                    best_candidates = [(min_angle, max_diff, recall, precision)]
+                elif precision == best_precision:
+                    best_candidates.append((min_angle, max_diff, recall, precision))
+                    
     
     print("====== 推荐阈值（约束优化） ======")
     print(f"min_angle_threshold = {best_params[0]}")
     print(f"max_diff_threshold  = {best_params[1]}")
     print(f"class1_recall       = {best_recall:.4f}")
     print(f"precision           = {best_precision:.4f}")
+    # best_params = max(best_candidates, key=lambda x: x[0])
     return best_params
 
 def stage1_test(idx, raw_data, best_params):
@@ -121,3 +136,70 @@ def stage1_test(idx, raw_data, best_params):
             idx_needed_net.append(id)
 
     return stage1_correct, idx_needed_net
+
+import matplotlib.pyplot as plt
+import numpy as np
+import os
+
+def plot_threshold_heatmap_save_with_recall(data, class_1_all, min_angle_range, max_diff_range, recall_threshold=0.9, save_path="threshold_heatmap.png"):
+    """
+    画二维阈值–准确率热图，颜色表示 precision，叠加 recall >= recall_threshold 等值线
+    并标明 recall >= threshold 区域
+    """
+    precision_matrix = np.zeros((len(max_diff_range), len(min_angle_range)))
+    recall_matrix = np.zeros((len(max_diff_range), len(min_angle_range)))
+
+    # 遍历每个阈值组合
+    for i, max_diff in enumerate(max_diff_range):
+        for j, min_angle in enumerate(min_angle_range):
+            recall, precision = test_one_setting(data, class_1_all, min_angle, max_diff, verbose=False)
+            precision_matrix[i, j] = precision
+            recall_matrix[i, j] = recall
+
+    min_angle_vals = list(min_angle_range)
+    max_diff_vals = list(max_diff_range)
+
+    plt.figure(figsize=(10, 6))
+    
+    # 热图：precision
+    plt.imshow(
+        precision_matrix, 
+        origin='lower', 
+        extent=[min_angle_vals[0], min_angle_vals[-1], max_diff_vals[0], max_diff_vals[-1]],
+        aspect='auto',
+        cmap='viridis'
+    )
+    plt.colorbar(label='Precision')
+    plt.xlabel('min_angle_threshold')
+    plt.ylabel('max_diff_threshold')
+    plt.title('Precision Heatmap with Recall Constraint')
+
+    # 填充 recall >= threshold 区域
+    recall_mask = recall_matrix >= recall_threshold
+    plt.contourf(
+        min_angle_vals,
+        max_diff_vals,
+        recall_mask,
+        levels=[0.5, 1],   # True=1, False=0
+        colors=['none', 'red'],
+        alpha=0.2           # 半透明
+    )
+
+    # 等值线
+    CS = plt.contour(
+        min_angle_vals,
+        max_diff_vals,
+        recall_matrix,
+        levels=[recall_threshold],
+        colors='red',
+        linewidths=2
+    )
+    plt.clabel(CS, fmt=f'Recall={recall_threshold:.2f}', colors='red')
+
+    # 保存图片
+    save_dir = os.path.dirname(save_path)
+    if save_dir and not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Heatmap saved to {save_path}")
