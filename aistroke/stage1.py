@@ -118,7 +118,7 @@ def stage1_train(idx, raw_data):
     print(f"max_diff_threshold  = {best_params[1]}")
     print(f"class1_recall       = {best_recall:.4f}")
     print(f"precision           = {best_precision:.4f}")
-    # best_params = max(best_candidates, key=lambda x: x[0])
+    best_params = max(best_candidates, key=lambda x: x[0])
     return best_params
 
 def stage1_test(idx, raw_data, best_params):
