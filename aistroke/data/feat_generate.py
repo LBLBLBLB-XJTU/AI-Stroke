@@ -5,9 +5,9 @@ from ptwt.continuous_transform import cwt as ptwt_cwt
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
-mask = [0,3,6,9,12,13,14,15,16,17,18,19,20,21,22,23]
+mask = [0,7,8,9,10,11,12,13,14,15,16]
 
-def normalize_smpl_output_torch(joints, root_idx=0, head_idx=15, eps=1e-6):
+def normalize_smpl_output_torch(joints, root_idx=0, head_idx=10, eps=1e-6):
     B, J, C = joints.shape
     joints = joints.clone()
 
@@ -48,7 +48,7 @@ def normalize_smpl_output_torch(joints, root_idx=0, head_idx=15, eps=1e-6):
 
     # -------- 旋转：统一面向前方 (+Z) --------
     # 使用肩膀向量生成水平 forward
-    right = joints[:,17] - joints[:,16]  # 右肩 - 左肩
+    right = joints[:,11] - joints[:,14]  # 右肩 - 左肩
     up = torch.tensor([0,1,0], device=joints.device, dtype=joints.dtype).view(1,3).expand_as(right)
     forward = torch.cross(up, right, dim=-1)  # 水平向前
     forward = F.normalize(forward + eps, dim=-1)
@@ -94,15 +94,15 @@ def generate_feat(cfg, joints, device, modalities_used):
         results["joints"] = joints_masked
 
     if "left_arm_angle" in modalities_used:
-        results["left_arm_angle"] = compute_limbs_angle_batch(joints_all[:,16], joints_all[:,18], joints_all[:,1], joints_all[:,16])
+        results["left_arm_angle"] = compute_limbs_angle_batch(joints_all[:,11], joints_all[:,13], joints_all[:,11], joints_all[:,4])
     if "right_arm_angle" in modalities_used:
-        results["right_arm_angle"] = compute_limbs_angle_batch(joints_all[:,17], joints_all[:,19], joints_all[:,2], joints_all[:,17])
+        results["right_arm_angle"] = compute_limbs_angle_batch(joints_all[:,14], joints_all[:,16], joints_all[:,14], joints_all[:,1])
 
     if "diff" in modalities_used:
         if "left_arm_angle" not in results.keys():
-            results["left_arm_angle"] = compute_limbs_angle_batch(joints_all[:,16], joints_all[:,18], joints_all[:,1], joints_all[:,16])
+            results["left_arm_angle"] = compute_limbs_angle_batch(joints_all[:,11], joints_all[:,13], joints_all[:,11], joints_all[:,4])
         if "right_arm_angle" not in results.keys():
-            results["right_arm_angle"] = compute_limbs_angle_batch(joints_all[:,17], joints_all[:,19], joints_all[:,2], joints_all[:,17])
+            results["right_arm_angle"] = compute_limbs_angle_batch(joints_all[:,14], joints_all[:,16], joints_all[:,14], joints_all[:,1])
         results["diff"] = torch.abs(results["left_arm_angle"] - results["right_arm_angle"])
 
     # 检查所有第一维 T 是否一致
@@ -111,7 +111,7 @@ def generate_feat(cfg, joints, device, modalities_used):
 
     return results
 
-def visualize_skeleton_3d(joints, save_path, root_idx=0, head_idx=15, left_shoulder_idx=16, right_shoulder_idx=17, frame_idx=0):
+def visualize_skeleton_3d(joints, save_path, root_idx=0, head_idx=10, left_shoulder_idx=11, right_shoulder_idx=14, frame_idx=0):
     import numpy as np
     import matplotlib.pyplot as plt
 

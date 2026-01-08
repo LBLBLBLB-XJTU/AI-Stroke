@@ -38,7 +38,7 @@ def main():
     logger.info(f"配置：{cfg}")
 
     # 加载数据
-    raw_path = os.path.join(os.path.dirname(cfg.PROJECT_ROOT), cfg.PATH.RAW_LABEL_DATA_PATH)
+    raw_path = os.path.join(os.path.dirname(cfg.PROJECT_ROOT), cfg.PATH.DATA_PATH)
     raw_data = joblib.load(raw_path)
     labels = [d["total_label"] for d in raw_data]
 
@@ -46,7 +46,7 @@ def main():
     train_val_idx, test_idx = train_test_split(
         np.arange(len(labels)), test_size=cfg.SPLIT_RATIO[2] / sum(cfg.SPLIT_RATIO), stratify=labels, random_state=cfg.SEED_VALUE
     )
-    best_params = stage1_train(train_val_idx, raw_data)
+    best_params = stage1_train(train_val_idx, raw_data, cfg)
     logger.info(f"stage1参数选择：{best_params}")
     train_idx, val_idx = train_test_split(
         train_val_idx, test_size=cfg.SPLIT_RATIO[1] / (cfg.SPLIT_RATIO[0] + cfg.SPLIT_RATIO[1]),

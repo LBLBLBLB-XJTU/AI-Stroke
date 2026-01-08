@@ -11,21 +11,22 @@ cfg.PROJECT_ROOT = ""
 cfg.OUTER_FOLDS = 10
 cfg.INNER_FOLDS = 9
 cfg.SPLIT_RATIO = [80, 10, 10]
-cfg.USE_STAGE1 = False
+cfg.USE_STAGE1 = True
 
 # 路径配置
 cfg.PATH = CN()
-cfg.PATH.RAW_LABEL_DATA_PATH = "raw_data_generate/raw_label_data_clipped_byaudio.pkl"
+cfg.PATH.DATA_PATH = "data_generate/3data_with_angles.pkl"
+cfg.PATH.CLASS1_PATH = "data_generate/sample_txts/class_1.txt"
 
 # 训练参数
 cfg.TRAIN = CN()
 cfg.TRAIN.BATCH_SIZE = 16
 cfg.TRAIN.EPOCH = 500
-cfg.TRAIN.LR = 1e-4
+cfg.TRAIN.LR = 1e-5
 cfg.TRAIN.WEIGHT_DECAY = cfg.TRAIN.LR * 0.1
 cfg.TRAIN.T_MAX = 1000
 
-# 数据参数
+# 数据参数 目前没用到，先不管
 cfg.DATA = CN() 
 cfg.DATA.AUGMENT = CN()
 cfg.DATA.AUGMENT.AUGMENT_PROB = 0
@@ -54,12 +55,12 @@ cfg.MODEL.MODALITIES_NAMES = (
     "diff"
 )
 cfg.MODEL.MODALITIES_DIMS = (
-    48,  
+    33,  
     1, 
     1,
     1
 )
-cfg.MODEL.MODALITIES_USED_IDX = [0, 3] # 确定
+cfg.MODEL.MODALITIES_USED_IDX = [0, 1, 2, 3] # 确定
 # 模型参数
 cfg.MODEL.EMBED_DIM = 256
 cfg.MODEL.TRANSFORMER_LAYERS = 3
@@ -67,7 +68,7 @@ cfg.MODEL.DROP = 0.3
 cfg.MODEL.NUM_HEADS = 8
 # 骨架配置
 cfg.MODEL.SKELETON_NAME = "joints"
-cfg.MODEL.NUM_JOINTS = 16
+cfg.MODEL.NUM_JOINTS = 11
 cfg.MODEL.SKELETON_CHANNELS = 3
 cfg.MODEL.SKELETON_NUM_HEADS = max(1, cfg.MODEL.NUM_HEADS // 2)
 cfg.MODEL.SKELETON_CONV_CHANNELS = [64, 128]

@@ -22,8 +22,8 @@ aistroke/logs/
 *.npz
 *.csv
 *.h5
-exclude_huanz.txt
-Limb_Segment.txt
+descr.txt
+joints.json
 
 # =========================
 # 训练产物 / 输出

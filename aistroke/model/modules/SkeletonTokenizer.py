@@ -11,7 +11,7 @@ class SkeletonTokenizer(nn.Module):
     - Step2: Progressive Conv2d to raise channels C->E
     - Step3: Final AdaptiveAvgPool2d to collapse T -> 1
     """
-    def __init__(self, in_channels=3, embed_dim=128, num_joints=16,
+    def __init__(self, in_channels=3, embed_dim=128, num_joints=11,
                  conv_channels=[64,128], drop=0.2, num_heads=4,
                  T_pool=32):
         super().__init__()
