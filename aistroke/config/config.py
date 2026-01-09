@@ -21,9 +21,9 @@ cfg.PATH.CLASS1_PATH = "data_generate/sample_txts/class_1.txt"
 # 训练参数
 cfg.TRAIN = CN()
 cfg.TRAIN.BATCH_SIZE = 16
-cfg.TRAIN.EPOCH = 500
-cfg.TRAIN.LR = 1e-5
-cfg.TRAIN.WEIGHT_DECAY = cfg.TRAIN.LR * 0.1
+cfg.TRAIN.EPOCH = 100
+cfg.TRAIN.LR = 3e-4
+cfg.TRAIN.WEIGHT_DECAY = 3e-4
 cfg.TRAIN.T_MAX = 1000
 
 # 数据参数 目前没用到，先不管
@@ -37,13 +37,13 @@ cfg.DATA.AUGMENT.ROTATE_RANGE_DENOMINATOR = 18
 
 # loss参数
 cfg.LOSS = CN()
-cfg.LOSS.LABEL_SMOOTHING = 0.3
-cfg.LOSS.CE_LAMBDA = 1
-cfg.LOSS.L2_LAMBDA = 2e-4
-cfg.LOSS.FEAT_LAMBDA = 5e-2
-cfg.LOSS.CENTER_LAMBDA = 1e-2
-cfg.LOSS.TRIPLET_LAMBDA = 1e-2
-cfg.LOSS.TRIPLET_MARGIN = 0.3
+cfg.LOSS.LABEL_SMOOTHING = 0.05
+cfg.LOSS.CE_LAMBDA = 1.0
+cfg.LOSS.L2_LAMBDA = 1e-4
+cfg.LOSS.FEAT_LAMBDA = 0.0
+cfg.LOSS.CENTER_LAMBDA = 5e-4
+cfg.LOSS.TRIPLET_LAMBDA = 0.0
+cfg.LOSS.TRIPLET_MARGIN = 0.0
 
 # 模型参数
 cfg.MODEL = CN()
@@ -60,25 +60,25 @@ cfg.MODEL.MODALITIES_DIMS = (
     1,
     1
 )
-cfg.MODEL.MODALITIES_USED_IDX = [0, 1, 2, 3] # 确定
+cfg.MODEL.MODALITIES_USED_IDX = [0, 1, 2, 3]  # 确定
 # 模型参数
-cfg.MODEL.EMBED_DIM = 256
-cfg.MODEL.TRANSFORMER_LAYERS = 3
-cfg.MODEL.DROP = 0.3
-cfg.MODEL.NUM_HEADS = 8
+cfg.MODEL.EMBED_DIM = 64
+cfg.MODEL.TRANSFORMER_LAYERS = 1
+cfg.MODEL.DROP = 0.2
+cfg.MODEL.NUM_HEADS = 2
 # 骨架配置
 cfg.MODEL.SKELETON_NAME = "joints"
 cfg.MODEL.NUM_JOINTS = 11
 cfg.MODEL.SKELETON_CHANNELS = 3
 cfg.MODEL.SKELETON_NUM_HEADS = max(1, cfg.MODEL.NUM_HEADS // 2)
-cfg.MODEL.SKELETON_CONV_CHANNELS = [64, 128]
+cfg.MODEL.SKELETON_CONV_CHANNELS = [64]
 cfg.MODEL.SKELETON_TIME_POOL_TO = 32
 # 其他模态配置
-cfg.MODEL.OTHER_CONV_CHANNELS = [64, 128]
+cfg.MODEL.OTHER_CONV_CHANNELS = [64]
 cfg.MODEL.OTHER_TIME_POOL_TO = 32
 # 分类器配置
-cfg.MODEL.FACE_S = 30.0
-cfg.MODEL.FACE_M = 0.35
+cfg.MODEL.FACE_S = None
+cfg.MODEL.FACE_M = None
 
 def get_cfg_defaults():
     """Get a yacs CfgNode object with default values for my_project."""

@@ -58,7 +58,7 @@ def add_sample_class():
 	var_len = np.var(len_list)
 
 	print(f"有标签数据数量：{len(classfied_data)}")
-	print(f"序列长度平均值: {avg_len:.2f}, 方差: {var_len:.2f}")
+	print(f"序列长度平均值: {avg_len:.2f}, 方差: {var_len:.2f}, 最小值: {np.min(len_list)}, 最大值: {np.max(len_list)}")
 
 if __name__ == "__main__":
 	add_sample_class()

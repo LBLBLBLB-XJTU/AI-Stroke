@@ -40,7 +40,7 @@ def collect_data():
 					left_label = 0
 				if "异常" in gt_json.get("yszjlyc", ""):
 					right_label = 0
-				assert left_label == 0 or right_label == 0, f"错误标签: {label_path}\n内容: {gt_json}"
+				assert left_label == 0 or right_label == 0, f"错误标签: {huanz}\n内容: {gt_json}"
 
 		data[huanz] = {
 			"id": huanz,

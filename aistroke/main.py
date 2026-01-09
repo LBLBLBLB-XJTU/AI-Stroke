@@ -6,6 +6,7 @@ import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 from sklearn.model_selection import train_test_split
+from collections import Counter
 
 from config.config import parse_args
 from utils.seed import set_random_seed
@@ -14,7 +15,6 @@ from data.dataset import build_dataloaders
 from model.MyNet import MyNet
 from model.loss import Losses
 from utils.engine import run_one_epoch_cosface
-
 from stage1 import stage1_test, stage1_train
 
 # 项目路径
@@ -55,6 +55,11 @@ def main():
     )
 
     logger.info(f"训练集样本数: {len(train_idx)}, 验证集样本数: {len(val_idx)}, 测试集样本数: {len(test_idx)}")
+    test_labels = [labels[i] for i in test_idx]
+    counter = Counter(test_labels)
+    logger.info("测试集类别分布：")
+    for k, v in counter.items():
+        logger.info(f"  label={k}: {v} 个样本")
 
     train_loader, val_loader, test_loader = build_dataloaders(
         cfg,
