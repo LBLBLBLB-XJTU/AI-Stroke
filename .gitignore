@@ -24,6 +24,7 @@ aistroke/logs/
 *.h5
 descr.txt
 joints.json
+results.json
 
 # =========================
 # 训练产物 / 输出

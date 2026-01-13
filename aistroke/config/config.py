@@ -12,6 +12,7 @@ cfg.OUTER_FOLDS = 10
 cfg.INNER_FOLDS = 9
 cfg.SPLIT_RATIO = [80, 10, 10]
 cfg.USE_STAGE1 = True
+cfg.SEGMENT = 0
 
 # 路径配置
 cfg.PATH = CN()
@@ -20,8 +21,8 @@ cfg.PATH.CLASS1_PATH = "data_generate/sample_txts/class_1.txt"
 
 # 训练参数
 cfg.TRAIN = CN()
-cfg.TRAIN.BATCH_SIZE = 16
-cfg.TRAIN.EPOCH = 100
+cfg.TRAIN.BATCH_SIZE = 32
+cfg.TRAIN.EPOCH = 500
 cfg.TRAIN.LR = 3e-4
 cfg.TRAIN.WEIGHT_DECAY = 3e-4
 cfg.TRAIN.T_MAX = 1000

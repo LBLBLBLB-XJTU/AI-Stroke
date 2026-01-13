@@ -11,6 +11,7 @@ from collections import Counter
 from config.config import parse_args
 from utils.seed import set_random_seed
 from utils.logger import setup_logger, log_scalars
+from utils.choose_segment import choose_segment
 from data.dataset import build_dataloaders
 from model.MyNet import MyNet
 from model.loss import Losses
@@ -40,6 +41,7 @@ def main():
     # 加载数据
     raw_path = os.path.join(os.path.dirname(cfg.PROJECT_ROOT), cfg.PATH.DATA_PATH)
     raw_data = joblib.load(raw_path)
+    raw_data = choose_segment(raw_data, cfg)
     labels = [d["total_label"] for d in raw_data]
 
     # 简单划分 train/val/test (比如 70%/15%/15%)
@@ -136,7 +138,7 @@ def main():
     net.load_state_dict(checkpoint["model_state_dict"])
 
     test_results  = run_one_epoch_cosface(net, test_loader, device, criterion, mode="test", save_dir=log_dir)
-    stage2_correct = test_results["correct_stage2"]
+    stage2_correct = test_results["stage2_correct"]
 
     final_acc = (stage1_correct + stage2_correct) / len(test_idx)
     net_acc = test_results["final_acc"]

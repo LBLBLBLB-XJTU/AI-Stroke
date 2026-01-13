@@ -32,8 +32,8 @@ def add_sample_class():
     # 遍历每个样本
     for huanz in data:
         # 获取角度和id
-        left_angles = np.array(huanz["left_arm_angles"])
-        right_angles = np.array(huanz["right_arm_angles"])
+        left_angles = np.array(huanz["left_arm_angles_0"])
+        right_angles = np.array(huanz["right_arm_angles_0"])
         sample_id = huanz["id"]  # 这里 huanz 是键名，作为样本id使用
 
         # 判断类别

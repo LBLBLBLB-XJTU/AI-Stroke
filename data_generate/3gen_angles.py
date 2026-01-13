@@ -4,6 +4,9 @@ import os.path as osp
 import torch
 import numpy as np
 
+CLASSFIED_DATA_PATH = osp.join(os.path.dirname(os.path.abspath(__file__)), "2classfied_data.pkl")
+DATA_WITH_ANGLES_PATH = osp.join(os.path.dirname(os.path.abspath(__file__)), "3data_with_angles.pkl")
+
 def compute_angle(start1, end1, start2, end2):
 	start1 = torch.tensor(start1, dtype=torch.float32) if isinstance(start1, np.ndarray) else start1
 	end1 = torch.tensor(end1, dtype=torch.float32) if isinstance(end1, np.ndarray) else end1
@@ -29,30 +32,48 @@ def compute_angle(start1, end1, start2, end2):
 	return 180 - angle_deg.item()
 
 def gen_angles():
-	classfied_data_path = osp.join(os.path.dirname(os.path.abspath(__file__)), "2classfied_data.pkl")
-	data_with_angles_path = osp.join(os.path.dirname(os.path.abspath(__file__)), "3data_with_angles.pkl")
-
-	classfied_data = joblib.load(classfied_data_path)
+	classfied_data = joblib.load(CLASSFIED_DATA_PATH)
 
 	new_data = []
 	for sample in classfied_data:
-		joints = sample["joints"]
-
-		left_angles = []
-		right_angles = []
-
-		for joint_frame in joints:
-			left_angle = compute_angle(joint_frame[11], joint_frame[13], joint_frame[11], joint_frame[4])
-			right_angle = compute_angle(joint_frame[14], joint_frame[16], joint_frame[14], joint_frame[1])
-			left_angles.append(left_angle)
-			right_angles.append(right_angle)
-		
-		sample["left_arm_angles"] = left_angles
-		sample["right_arm_angles"] = right_angles
-
-		new_data.append(sample)
+		joints_0 = sample["joints_0"]
+		joints_1 = sample["joints_1"]
+		joints_2 = sample["joints_2"]
 	
-	joblib.dump(new_data, data_with_angles_path)
+		left_angles_0 = []
+		right_angles_0 = []
+		left_angles_1 = []
+		right_angles_1 = []
+		left_angles_2 = []
+		right_angles_2 = []
+
+		for joint_frame_0, joint_frame_1, joint_frame_2 in zip(joints_0, joints_1, joints_2):
+			left_angle_0 = compute_angle(joint_frame_0[11], joint_frame_0[13], joint_frame_0[11], joint_frame_0[4])
+			right_angle_0 = compute_angle(joint_frame_1[14], joint_frame_1[16], joint_frame_1[14], joint_frame_1[1])
+			left_angles_0.append(left_angle_0)
+			right_angles_0.append(right_angle_0)
+
+			left_angle_1 = compute_angle(joint_frame_1[11], joint_frame_1[13], joint_frame_1[11], joint_frame_1[4])
+			right_angle_1 = compute_angle(joint_frame_1[14], joint_frame_1[16], joint_frame_1[14], joint_frame_1[1])
+			left_angles_1.append(left_angle_1)
+			right_angles_1.append(right_angle_1)
+
+			left_angle_2 = compute_angle(joint_frame_2[11], joint_frame_2[13], joint_frame_2[11], joint_frame_2[4])
+			right_angle_2 = compute_angle(joint_frame_2[14], joint_frame_2[16], joint_frame_2[14], joint_frame_2[1])
+			left_angles_2.append(left_angle_2)
+			right_angles_2.append(right_angle_2)
+
+
+		sample["left_arm_angles_0"] = left_angles_0
+		sample["right_arm_angles_0"] = right_angles_0
+		sample["left_arm_angles_1"] = left_angles_1
+		sample["right_arm_angles_1"] = right_angles_1
+		sample["left_arm_angles_2"] = left_angles_2
+		sample["right_arm_angles_2"] = right_angles_2
+		new_data.append(sample)
+		print(f"Processed sample {sample['id']}")
+	
+	joblib.dump(new_data, DATA_WITH_ANGLES_PATH)
 			
 if __name__ == "__main__":
 	gen_angles()

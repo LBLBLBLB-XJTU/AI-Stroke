@@ -6,12 +6,11 @@ import numpy as np
 CLASS0_PATH = osp.join(os.path.dirname(os.path.abspath(__file__)), "sample_txts", "class_0.txt")
 CLASS1_PATH = osp.join(os.path.dirname(os.path.abspath(__file__)), "sample_txts", "class_1.txt")
 CLASS2_PATH = osp.join(os.path.dirname(os.path.abspath(__file__)), "sample_txts", "class_2.txt")
+LABEL_DATA_PATH = osp.join(os.path.dirname(os.path.abspath(__file__)), "1label_data.pkl")
+CLASSFIED_DATA_PATH = osp.join(os.path.dirname(os.path.abspath(__file__)), "2classfied_data.pkl")
 
 def add_sample_class():
-	label_data_path = osp.join(os.path.dirname(os.path.abspath(__file__)), "1label_data.pkl")
-	classfied_data_path = osp.join(os.path.dirname(os.path.abspath(__file__)), "2classfied_data.pkl")
-
-	data = joblib.load(label_data_path)
+	data = joblib.load(LABEL_DATA_PATH)
 
 	with open(CLASS0_PATH, "r") as f:
 		class0_list = f.read().strip().split("\n")
@@ -23,11 +22,13 @@ def add_sample_class():
 	classfied_data = []
 	len_list = []
 	for huanz in data.keys():
-		len_list.append(data[huanz]["joints"].shape[0])
+		len_list.append(data[huanz]["joints_0"].shape[0])
 		if huanz in class0_list:
 			classfied_data.append({
 				"id": huanz,
-				"joints": data[huanz]["joints"],
+				"joints_0": data[huanz]["joints_0"],
+				"joints_1": data[huanz]["joints_1"],
+				"joints_2": data[huanz]["joints_2"],
 				"total_label": data[huanz]["total_label"],
 				"left_label": data[huanz]["left_label"],
 				"right_label": data[huanz]["right_label"],
@@ -36,7 +37,9 @@ def add_sample_class():
 		elif huanz in class1_list:
 			classfied_data.append({
 				"id": huanz,
-				"joints": data[huanz]["joints"],
+				"joints_0": data[huanz]["joints_0"],
+				"joints_1": data[huanz]["joints_1"],
+				"joints_2": data[huanz]["joints_2"],
 				"total_label": data[huanz]["total_label"],
 				"left_label": data[huanz]["left_label"],
 				"right_label": data[huanz]["right_label"],
@@ -45,14 +48,16 @@ def add_sample_class():
 		elif huanz in class2_list:
 			classfied_data.append({
 				"id": huanz,
-				"joints": data[huanz]["joints"],
+				"joints_0": data[huanz]["joints_0"],
+				"joints_1": data[huanz]["joints_1"],
+				"joints_2": data[huanz]["joints_2"],
 				"total_label": data[huanz]["total_label"],
 				"left_label": data[huanz]["left_label"],
 				"right_label": data[huanz]["right_label"],
 				"sample_class": 2,
 			})
 
-	joblib.dump(classfied_data, classfied_data_path)
+	joblib.dump(classfied_data, CLASSFIED_DATA_PATH)
 
 	avg_len = np.mean(len_list)
 	var_len = np.var(len_list)
