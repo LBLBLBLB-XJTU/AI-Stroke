@@ -76,41 +76,11 @@ class Losses(nn.Module):
 
             total_loss += self.center_lambda * center_loss
 
-        # =========================================================
-        # 5. Triplet Loss (online mining: hardest positive/negative)
-        # =========================================================
-        triplet_loss = torch.tensor(0., device=logit_left.device)
-        if self.triplet_lambda > 0:
-            all_feats = torch.cat([feat_left, feat_right], dim=0)
-            all_labels = torch.cat([left_labels, right_labels], dim=0)
-
-            # Compute pairwise distance matrix
-            dist = torch.cdist(all_feats, all_feats, p=2)
-
-            triplets = []
-            for i in range(len(all_feats)):
-                pos_mask = (all_labels == all_labels[i])
-                neg_mask = (all_labels != all_labels[i])
-
-                pos_dist = dist[i][pos_mask]
-                neg_dist = dist[i][neg_mask]
-
-                if len(pos_dist) > 1 and len(neg_dist) > 0:
-                    hardest_pos = pos_dist.max()
-                    hardest_neg = neg_dist.min()
-                    triplets.append(F.relu(hardest_pos - hardest_neg + self.margin))
-
-            if len(triplets) > 0:
-                triplet_loss = torch.mean(torch.stack(triplets))
-                total_loss += self.triplet_lambda * triplet_loss
-
         return {
             "total_loss": total_loss,
 
             "ce_loss": ce_loss,
             "l2_reg_loss": l2_reg_loss,
             "feat_reg_loss": feat_reg_loss,
-
             "center_loss": center_loss,
-            "triplet_loss": triplet_loss,
         }

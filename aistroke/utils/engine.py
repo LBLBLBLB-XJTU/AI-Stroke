@@ -123,7 +123,6 @@ def run_one_epoch_cosface(
         total_loss_l2 += loss_dict["l2_reg_loss"].item()
         total_loss_feat += loss_dict["feat_reg_loss"].item()
         total_loss_center += loss_dict["center_loss"].item()
-        total_loss_triplet += loss_dict["triplet_loss"].item()
         batch_count += 1
 
         # ======================================================
@@ -186,7 +185,6 @@ def run_one_epoch_cosface(
         "l2_reg_loss": total_loss_l2 / batch_count,
         "feat_reg_loss": total_loss_feat / batch_count,
         "center_loss": total_loss_center / batch_count,
-        "triplet_loss": total_loss_triplet / batch_count,
 
         "stage2_correct": correct_final
     }
