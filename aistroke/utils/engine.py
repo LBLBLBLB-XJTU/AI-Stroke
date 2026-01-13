@@ -9,7 +9,7 @@ from sklearn.metrics import (
 from .visualisation_and_record import plot_confusion_matrix, plot_roc_curve, plot_pr_curve, save_error_records, save_upper_body_skeleton_3d_cam
 from .gradcam_skeleton import UpperBodySkeletonGradCAM
 
-def run_one_epoch_cosface(
+def run_one_epoch(
     net,
     data_loader,
     device,

@@ -1,6 +1,6 @@
 
 def choose_segment(raw_data, cfg):
-    segment_option = cfg.SEGMENT
+    segment_option = cfg.DATA.SEGMENT
     new_raw_data = []
     
     if segment_option == 0:

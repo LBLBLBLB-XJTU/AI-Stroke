@@ -12,7 +12,6 @@ cfg.OUTER_FOLDS = 10
 cfg.INNER_FOLDS = 9
 cfg.SPLIT_RATIO = [80, 10, 10]
 cfg.USE_STAGE1 = True
-cfg.SEGMENT = 0
 
 # 路径配置
 cfg.PATH = CN()
@@ -21,14 +20,16 @@ cfg.PATH.CLASS1_PATH = "data_generate/sample_txts/class_1.txt"
 
 # 训练参数
 cfg.TRAIN = CN()
-cfg.TRAIN.BATCH_SIZE = 32
-cfg.TRAIN.EPOCH = 500
+cfg.TRAIN.BATCH_SIZE = 16
+cfg.TRAIN.EPOCH = 100
 cfg.TRAIN.LR = 3e-4
-cfg.TRAIN.WEIGHT_DECAY = 3e-4
-cfg.TRAIN.T_MAX = 1000
+cfg.TRAIN.WEIGHT_DECAY = 1e-4
+cfg.TRAIN.T_MAX = 100
+cfg.TRAIN.WARMUP_EPOCHS = 10
 
 # 数据参数 目前没用到，先不管
-cfg.DATA = CN() 
+cfg.DATA = CN()
+cfg.DATA.SEGMENT = 0
 cfg.DATA.AUGMENT = CN()
 cfg.DATA.AUGMENT.AUGMENT_PROB = 0
 cfg.DATA.AUGMENT.NOISE_STD = 0.01
@@ -41,7 +42,7 @@ cfg.LOSS = CN()
 cfg.LOSS.LABEL_SMOOTHING = 0.05
 cfg.LOSS.CE_LAMBDA = 1.0
 cfg.LOSS.L2_LAMBDA = 1e-4
-cfg.LOSS.CENTER_LAMBDA = 5e-4
+cfg.LOSS.CENTER_LAMBDA = 1e-4
 
 # 模型参数
 cfg.MODEL = CN()
@@ -59,7 +60,7 @@ cfg.MODEL.MODALITIES_DIMS = (
     1
 )
 cfg.MODEL.MODALITIES_USED_IDX = [0, 1, 2, 3]  # 确定
-# 模型参数
+# 模型通用参数
 cfg.MODEL.EMBED_DIM = 64
 cfg.MODEL.TRANSFORMER_LAYERS = 1
 cfg.MODEL.DROP = 0.2
@@ -74,6 +75,7 @@ cfg.MODEL.SKELETON_TIME_POOL_TO = 32
 # 其他模态配置
 cfg.MODEL.OTHER_CONV_CHANNELS = [64]
 cfg.MODEL.OTHER_TIME_POOL_TO = 32
+
 
 def get_cfg_defaults():
     """Get a yacs CfgNode object with default values for my_project."""

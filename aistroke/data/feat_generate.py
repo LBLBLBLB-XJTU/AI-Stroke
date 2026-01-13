@@ -1,9 +1,6 @@
 import torch
 import torch.nn.functional as F
 import numpy as np
-from ptwt.continuous_transform import cwt as ptwt_cwt
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 
 mask = [0,7,8,9,10,11,12,13,14,15,16]
 

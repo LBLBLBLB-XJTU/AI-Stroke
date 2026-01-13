@@ -7,10 +7,7 @@ class Losses(nn.Module):
         super().__init__()
         self.ce_lambda = cfg.LOSS.CE_LAMBDA 
         self.l2_lambda = cfg.LOSS.L2_LAMBDA
-        self.feat_lambda = cfg.LOSS.FEAT_LAMBDA
         self.center_lambda = cfg.LOSS.CENTER_LAMBDA
-        self.triplet_lambda = cfg.LOSS.TRIPLET_LAMBDA
-        self.margin = cfg.LOSS.TRIPLET_MARGIN
 
         self.ce = nn.CrossEntropyLoss(label_smoothing=cfg.LOSS.LABEL_SMOOTHING)
 

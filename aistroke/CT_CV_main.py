@@ -12,11 +12,11 @@ import time
 from config.config import parse_args
 from utils.seed import set_random_seed
 from utils.logger import setup_logger, log_scalars
+from utils.choose_segment import choose_segment
 from data.dataset import build_dataloaders
 from model.MyNet import MyNet
 from model.loss import Losses
-from utils.engine import run_one_epoch_cosface
-
+from utils.engine import run_one_epoch
 from stage1 import stage1_train, stage1_test
 
 CLIPPED_DATA_PATH = osp.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "raw_data_generate", "raw_label_data_clipped_byaudio.pkl")
@@ -24,7 +24,8 @@ CLIPPED_DATA_PATH = osp.join(os.path.dirname(os.path.dirname(os.path.abspath(__f
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 sys.path.append(PROJECT_ROOT)
 
-def main():
+# TODO
+def main(): 
 	cfg = parse_args()
 	cfg.PROJECT_ROOT = PROJECT_ROOT
 	set_random_seed(cfg.SEED_VALUE)
@@ -41,8 +42,9 @@ def main():
 	logger.info(f"配置：{cfg}")
 
 	# 加载数据
-	raw_path = os.path.join(os.path.dirname(cfg.PROJECT_ROOT), cfg.PATH.RAW_LABEL_DATA_PATH)
+	raw_path = os.path.join(os.path.dirname(cfg.PROJECT_ROOT), cfg.PATH.DATA_PATH)
 	raw_data = joblib.load(raw_path)
+	raw_data = choose_segment(raw_data, cfg)
 	labels = [d["total_label"] for d in raw_data]
 
 	# 外层 fold: 测试
@@ -50,16 +52,12 @@ def main():
 	outer_fold_acc = []
 	outer_fold_net_acc = []
 
-	warmup_epochs = 15
-	lr_max = cfg.TRAIN.LR
-	lr_min = 1e-6
-
 	for outer_fold, (outer_trainval_idx, outer_test_idx) in enumerate(skf_outer.split(np.zeros(len(labels)), labels)):
 		logger.info(f"===== Outer Fold {outer_fold} =====")
 		outer_fold_dir = os.path.join(log_dir, f"fold{outer_fold}")
 		os.makedirs(outer_fold_dir, exist_ok=True)
 
-		best_params = stage1_train(outer_trainval_idx, raw_data)
+		best_params = stage1_train(outer_trainval_idx, raw_data, cfg)
 		logger.info(f"stage1参数选择：{best_params}")
 
 		outer_trainval_idx = list(outer_trainval_idx)
@@ -94,7 +92,6 @@ def main():
 			optimizer = torch.optim.AdamW(net.parameters(), lr=cfg.TRAIN.LR, weight_decay=cfg.TRAIN.WEIGHT_DECAY)
 			scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg.TRAIN.T_MAX , eta_min=1e-6)
 			criterion = Losses(cfg)
-			warmup_epochs = 15
 			lr_max = cfg.TRAIN.LR
 			lr_min = 1e-6
 
@@ -109,13 +106,13 @@ def main():
 			ckpt_path = os.path.join(inner_fold_dir, f"inner_best_model_fold{inner_fold}.pth")
 
 			for epoch in range(cfg.TRAIN.EPOCH):
-				if epoch < warmup_epochs:
-					lr = lr_min + (lr_max - lr_min) * (epoch + 1) / warmup_epochs
+				if epoch < cfg.TRAIN.WARMUP_EPOCHS:
+					lr = lr_min + (lr_max - lr_min) * (epoch + 1) / cfg.TRAIN.WARMUP_EPOCHS
 					for param_group in optimizer.param_groups:
 						param_group['lr'] = lr
 
-				train_results = run_one_epoch_cosface(net, train_loader, device, criterion, optimizer, mode="train")
-				val_results = run_one_epoch_cosface(net, val_loader, device, criterion, mode="eval")
+				train_results = run_one_epoch(net, train_loader, device, criterion, optimizer, mode="train")
+				val_results = run_one_epoch(net, val_loader, device, criterion, mode="eval")
 
 				log_scalars(writer, logger, "Train", train_results, epoch)
 				log_scalars(writer, logger, "Valid", val_results, epoch)
@@ -162,8 +159,8 @@ def main():
 		net.load_state_dict(checkpoint["model_state_dict"])
 		criterion = Losses(cfg)
 
-		test_results = run_one_epoch_cosface(net, test_loader, device, criterion, mode="test", save_dir=outer_fold_dir)
-		stage2_correct = test_results["correct_stage2"]
+		test_results = run_one_epoch(net, test_loader, device, criterion, mode="test", save_dir=outer_fold_dir)
+		stage2_correct = test_results["stage2_correct"]
 
 		final_acc = (stage1_correct + stage2_correct) / len(outer_test_idx)
 		net_acc = test_results["final_acc"]
