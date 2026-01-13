@@ -19,7 +19,6 @@ from model.loss import Losses
 from utils.engine import run_one_epoch
 from stage1 import stage1_train, stage1_test
 
-CLIPPED_DATA_PATH = osp.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "raw_data_generate", "raw_label_data_clipped_byaudio.pkl")
 # 项目路径
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 sys.path.append(PROJECT_ROOT)
