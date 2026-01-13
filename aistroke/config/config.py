@@ -41,7 +41,6 @@ cfg.LOSS = CN()
 cfg.LOSS.LABEL_SMOOTHING = 0.05
 cfg.LOSS.CE_LAMBDA = 1.0
 cfg.LOSS.L2_LAMBDA = 1e-4
-cfg.LOSS.FEAT_LAMBDA = 0.0
 cfg.LOSS.CENTER_LAMBDA = 5e-4
 
 # 模型参数
@@ -75,9 +74,6 @@ cfg.MODEL.SKELETON_TIME_POOL_TO = 32
 # 其他模态配置
 cfg.MODEL.OTHER_CONV_CHANNELS = [64]
 cfg.MODEL.OTHER_TIME_POOL_TO = 32
-# 分类器配置
-cfg.MODEL.FACE_S = None
-cfg.MODEL.FACE_M = None
 
 def get_cfg_defaults():
     """Get a yacs CfgNode object with default values for my_project."""

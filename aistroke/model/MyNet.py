@@ -3,7 +3,6 @@ import torch.nn as nn
 
 from .modules.TemporalTokenizer import TemporalTokenizer
 from .modules.SkeletonTokenizer import SkeletonTokenizer
-from .modules.CosFaceHead import CosFaceHead
 from .modules.LinearHead import LinearHead
 
 class MyNet(nn.Module):
@@ -30,14 +29,8 @@ class MyNet(nn.Module):
         self.other_time_pool_to = cfg.MODEL.OTHER_TIME_POOL_TO
 
         # classifer
-        self.face_s = cfg.MODEL.FACE_S
-        self.face_m = cfg.MODEL.FACE_M
-        if self.face_s != None and self.face_m != None:
-            self.left_head = CosFaceHead(self.embed_dim, self.face_s, self.face_m)
-            self.right_head = CosFaceHead(self.embed_dim, self.face_s, self.face_m)
-        else:
-            self.left_head = LinearHead(self.embed_dim, 2)
-            self.right_head = LinearHead(self.embed_dim, 2)
+        self.left_head = LinearHead(self.embed_dim, 2)
+        self.right_head = LinearHead(self.embed_dim, 2)
 
         # ---- skeleton-specific tokenizer ----
         if self.skeleton_name in self.used_modalities:

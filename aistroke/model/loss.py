@@ -49,18 +49,7 @@ class Losses(nn.Module):
             total_loss += self.l2_lambda * l2_reg_loss
 
         # =========================================================
-        # 3. Feature regularization
-        # =========================================================
-        feat_reg_loss = torch.tensor(0., device=logit_left.device)
-        if self.feat_lambda > 0:
-            # 更稳定的 feat reg（按维度平均）
-            mean_left, var_left = feat_left.mean(dim=0), feat_left.var(dim=0) + 1e-6
-            mean_right, var_right = feat_right.mean(dim=0), feat_right.var(dim=0) + 1e-6
-            feat_reg_loss = (mean_left.pow(2).mean() + var_left.mean() + mean_right.pow(2).mean() + var_right.mean()) * 0.5
-            total_loss += self.feat_lambda * feat_reg_loss
-
-        # =========================================================
-        # 4. Center Loss
+        # 3. Center Loss
         # =========================================================
         center_loss = torch.tensor(0., device=logit_left.device)
         if self.center_lambda > 0:
@@ -81,6 +70,5 @@ class Losses(nn.Module):
 
             "ce_loss": ce_loss,
             "l2_reg_loss": l2_reg_loss,
-            "feat_reg_loss": feat_reg_loss,
             "center_loss": center_loss,
         }

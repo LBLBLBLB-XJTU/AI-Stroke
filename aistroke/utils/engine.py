@@ -51,13 +51,7 @@ def run_one_epoch_cosface(
         # 1️⃣ Forward（train: 有梯度；eval: 无梯度）
         # ======================================================
         with torch.enable_grad() if is_train else torch.no_grad():
-            feats, _ = net(inputs)
-            logit_left = net.left_head(
-                feats[0], left_labels if is_train else None
-            )
-            logit_right = net.right_head(
-                feats[1], right_labels if is_train else None
-            )
+            feats, (logit_left, logit_right) = net(inputs)
 
             loss_dict = criterion(
                 feats,
@@ -121,7 +115,6 @@ def run_one_epoch_cosface(
         total_loss += loss_dict["total_loss"].item()
         total_loss_ce += loss_dict["ce_loss"].item()
         total_loss_l2 += loss_dict["l2_reg_loss"].item()
-        total_loss_feat += loss_dict["feat_reg_loss"].item()
         total_loss_center += loss_dict["center_loss"].item()
         batch_count += 1
 
@@ -183,7 +176,6 @@ def run_one_epoch_cosface(
         "total_loss": total_loss / batch_count,
         "ce_loss": total_loss_ce / batch_count,
         "l2_reg_loss": total_loss_l2 / batch_count,
-        "feat_reg_loss": total_loss_feat / batch_count,
         "center_loss": total_loss_center / batch_count,
 
         "stage2_correct": correct_final
