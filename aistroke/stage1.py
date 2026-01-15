@@ -136,7 +136,7 @@ def stage1_train(idx, raw_data, cfg):
     max_diff_list  = range(0, 40, 1)
 
     # ===== 可调超参数（系统级）=====
-    purity_min = 0.95   # 正常样本误杀容忍度
+    purity_min = cfg.STAGE1.PURITY_MIN   # 正常样本误杀容忍度
     # ==============================
 
     best_recall = -1

@@ -4,7 +4,7 @@ import random
 def joints_augment(joints, cfg):
     """
     对 SMPL 骨架序列进行数据增强（GPU版 + 概率控制）
-    joints: torch.Tensor, shape (T, 24, 3) 或 (B, T, 24, 3)
+    joints: torch.Tensor, shape (T, 17, 3) 或 (B, T, 17, 3)
     """
     device = cfg.DEVICE
     joints = torch.tensor(joints, dtype=torch.float32, device=device)
