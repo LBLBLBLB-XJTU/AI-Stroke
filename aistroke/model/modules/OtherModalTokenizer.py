@@ -1,21 +1,20 @@
 import torch
 import torch.nn as nn
 
-class SkeletonTokenizer(nn.Module):
+class OtherModalTokenizer(nn.Module):
     def __init__(
         self,
-        in_channels=3,
+        in_channels=1,
         embed_dim=128,
-        num_joints=11,
         conv_channels=(64, 128),
         drop=0.2,
         temporal_stride=(2, 2),
         num_heads=4,
-        max_T=512,   # 最大时间长度（用于 time pos）
+        max_T=512,
     ):
         super().__init__()
 
-        self.V = num_joints
+        self.V = 1
         self.embed_dim = embed_dim
 
         layers = []
@@ -43,7 +42,7 @@ class SkeletonTokenizer(nn.Module):
         )
 
         # joint positional encoding (shared across time)
-        self.joint_pos = nn.Parameter(
+        self.feat_pos = nn.Parameter(
             torch.randn(1, 1, self.V, embed_dim) * 0.02
         )
 
@@ -52,13 +51,13 @@ class SkeletonTokenizer(nn.Module):
             torch.randn(1, max_T, 1, embed_dim) * 0.02
         )
 
-        self.joint_attn = nn.MultiheadAttention(
+        self.feat_attn = nn.MultiheadAttention(
             embed_dim=embed_dim,
             num_heads=num_heads,
             batch_first=True,
             dropout=drop,
         )
-        self.joint_attn_ln = nn.LayerNorm(embed_dim)
+        self.feat_attn_ln = nn.LayerNorm(embed_dim)
 
         self.node_ffn = nn.Sequential(
             nn.Linear(embed_dim, embed_dim * 2),
@@ -71,14 +70,13 @@ class SkeletonTokenizer(nn.Module):
 
     def forward(self, x):
         """
-        x: (B, T, V, C)
+        x: (B, T, C)
         return: (B, T', V, E)
         """
-        B, T, V, C = x.shape
-        assert V == self.V
+        h = x.unsqueeze(-1).contiguous()
 
         # (B, C, T, V)
-        h = x.permute(0, 3, 1, 2).contiguous()
+        h = h.permute(0, 2, 1, 3).contiguous()
 
         # temporal conv (downsample T)
         h = self.temporal_conv(h)          # (B, Ch, T', V)
@@ -91,18 +89,18 @@ class SkeletonTokenizer(nn.Module):
         # -----------------------------
         # add positional encodings
         # -----------------------------
-        h = h + self.joint_pos
+        h = h + self.feat_pos
         h = h + self.time_pos[:, :Tt]
 
         # -----------------------------
-        # joint attention (no time mixing)
+        # feature attention (no time mixing)
         # -----------------------------
         h_flat = h.view(B * Tt, V, E)
 
-        attn_out, _ = self.joint_attn(
+        attn_out, _ = self.feat_attn(
             h_flat, h_flat, h_flat, need_weights=False
         )
-        h_flat = self.joint_attn_ln(h_flat + attn_out)
+        h_flat = self.feat_attn_ln(h_flat + attn_out)
 
         h = h_flat.view(B, Tt, V, E)
 

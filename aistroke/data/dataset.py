@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import Dataset, DataLoader, Sampler
 import numpy as np
-from .data_augment import joints_augment
+
 from .feat_generate import generate_feat
 
 class LabelAngleDataset(Dataset):
@@ -31,8 +31,7 @@ class LabelAngleDataset(Dataset):
 		huanz_id = sample["id"]
 		joints = sample["joints"]
 
-		joints_aug = joints_augment(joints, self.cfg)
-		feats = generate_feat(self.cfg, joints_aug, self.device, self.modalities_used)
+		feats = generate_feat(self.cfg, joints, self.device, self.modalities_used)
 
 		left_label = torch.tensor(sample["left_label"], dtype=torch.long)
 		right_label = torch.tensor(sample["right_label"], dtype=torch.long)

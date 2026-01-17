@@ -65,10 +65,10 @@ def main():
 
     train_loader, val_loader, test_loader = build_dataloaders(
         cfg,
-        train_idx=train_idx,
-        # train_idx=np.concatenate([train_idx, val_idx, test_idx]),
-        val_idx=val_idx,
-        # val_idx=np.concatenate([train_idx, val_idx, test_idx]),
+        # train_idx=train_idx,
+        train_idx=np.concatenate([train_idx, val_idx, test_idx]),
+        # val_idx=val_idx,
+        val_idx=np.concatenate([train_idx, val_idx, test_idx]),
         test_idx=[],
         raw_data=raw_data,
         device=device
@@ -90,6 +90,7 @@ def main():
     writer = SummaryWriter(log_dir=log_dir)
     best_acc = 0.0
     ckpt_path = os.path.join(log_dir, "best_model.pth")
+    last_ckpt_path = os.path.join(log_dir, "last_model.pth")
 
     for epoch in range(cfg.TRAIN.EPOCH):
         if epoch < cfg.TRAIN.WARMUP_EPOCHS:
@@ -116,9 +117,17 @@ def main():
 
         scheduler.step()
 
+    # 保存最后模型
+    torch.save({
+        "epoch": epoch,
+        "model_state_dict": net.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "best_acc": best_acc,
+    }, last_ckpt_path)
+
     writer.close()
 
-    # 测试
+    # stage1测试
     if cfg.USE_STAGE1:
         stage1_correct, idx_needed_net= stage1_test(test_idx, raw_data, best_params)
     else:
@@ -133,18 +142,27 @@ def main():
 				device=device
 			)
     
+    # 测试验证集最优模型
     checkpoint = torch.load(ckpt_path, map_location=device)
     net.load_state_dict(checkpoint["model_state_dict"])
-
     test_results  = run_one_epoch(net, test_loader, device, criterion, mode="test", save_dir=log_dir)
     stage2_correct = test_results["stage2_correct"]
-
     final_acc = (stage1_correct + stage2_correct) / len(test_idx)
     net_acc = test_results["final_acc"]
-
     logger.info(f"全系统测试结果: {final_acc}")
     logger.info(f"网络测试结果: {net_acc}")
     log_scalars(None, logger, "Test", test_results, "final")
+
+    # 测试最后模型
+    last_ckpt = torch.load(last_ckpt_path, map_location=device)
+    net.load_state_dict(last_ckpt["model_state_dict"])
+    test_results  = run_one_epoch(net, test_loader, device, criterion, mode="test", save_dir=log_dir)
+    stage2_correct = test_results["stage2_correct"]
+    final_acc = (stage1_correct + stage2_correct) / len(test_idx)
+    net_acc = test_results["final_acc"]
+    logger.info(f"全系统测试结果(最后模型): {final_acc}")
+    logger.info(f"网络测试结果(最后模型): {net_acc}")
+    log_scalars(None, logger, "Test_Last_ckpt", test_results, "final")
 
 if __name__ == "__main__":
     main()

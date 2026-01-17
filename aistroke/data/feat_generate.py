@@ -79,6 +79,8 @@ def compute_limbs_angle_batch(p1,p2,p3,p4,eps=1e-6):
     return angle
 
 def generate_feat(cfg, joints, device, modalities_used):
+    device = cfg.DEVICE
+    joints = torch.tensor(joints, dtype=torch.float32, device=device)
     results = {}
     T = joints.shape[0]
 
