@@ -19,13 +19,13 @@ cfg.STAGE1.PURITY_MIN = 0.9 # 正常样本误杀容忍度
 
 # 路径配置
 cfg.PATH = CN()
-cfg.PATH.DATA_PATH = "data_generate/3data_with_angles.pkl"
+cfg.PATH.DATA_PATH = "data_generate/2data_with_angles.pkl"
 cfg.PATH.CLASS1_PATH = "data_generate/sample_txts/class_1.txt"
 
 # 训练参数
 cfg.TRAIN = CN()
 cfg.TRAIN.BATCH_SIZE = 16
-cfg.TRAIN.EPOCH = 75
+cfg.TRAIN.EPOCH = 100
 cfg.TRAIN.LR = 3e-4
 cfg.TRAIN.WEIGHT_DECAY = 1e-4
 cfg.TRAIN.T_MAX = 100

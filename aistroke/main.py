@@ -48,20 +48,20 @@ def main():
     train_val_idx, test_idx = train_test_split(
         np.arange(len(labels)), test_size=cfg.SPLIT_RATIO[2] / sum(cfg.SPLIT_RATIO), stratify=labels, random_state=cfg.SEED_VALUE
     )
-    best_params = stage1_train(train_val_idx, raw_data, cfg)
-    logger.info(f"stage1参数选择：{best_params}")
     train_idx, val_idx = train_test_split(
         train_val_idx, test_size=cfg.SPLIT_RATIO[1] / (cfg.SPLIT_RATIO[0] + cfg.SPLIT_RATIO[1]),
         stratify=[labels[i] for i in train_val_idx],
         random_state=cfg.SEED_VALUE
     )
-
     logger.info(f"训练集样本数: {len(train_idx)}, 验证集样本数: {len(val_idx)}, 测试集样本数: {len(test_idx)}")
     test_labels = [labels[i] for i in test_idx]
     counter = Counter(test_labels)
     logger.info("测试集类别分布：")
     for k, v in counter.items():
         logger.info(f"  label={k}: {v} 个样本")
+
+    best_params = stage1_train(train_val_idx, raw_data, cfg, logger)
+    logger.info(f"stage1参数选择：{best_params}")
 
     train_loader, val_loader, test_loader = build_dataloaders(
         cfg,

@@ -13,7 +13,6 @@ def choose_segment(raw_data, cfg):
                 "total_label": sample["total_label"],
                 "left_label": sample["left_label"],
                 "right_label": sample["right_label"],
-                "sample_class": sample["sample_class"],
             }
             new_raw_data.append(new_sample)
     elif segment_option == 1:
@@ -26,7 +25,6 @@ def choose_segment(raw_data, cfg):
                 "total_label": sample["total_label"],
                 "left_label": sample["left_label"],
                 "right_label": sample["right_label"],
-                "sample_class": sample["sample_class"],
             }
             new_raw_data.append(new_sample)
     elif segment_option == 2:
@@ -39,7 +37,6 @@ def choose_segment(raw_data, cfg):
                 "total_label": sample["total_label"],
                 "left_label": sample["left_label"],
                 "right_label": sample["right_label"],
-                "sample_class": sample["sample_class"],
             }
             new_raw_data.append(new_sample)
     else:

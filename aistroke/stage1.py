@@ -1,296 +1,192 @@
 import numpy as np
-import os
-import os.path as osp
 
-CLIPPED_DATA_PATH = osp.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "raw_data_generate", "raw_label_data_clipped_byaudio.pkl")
+# =====================================================
+# 1. 时间长度阈值选择
+# =====================================================
+def choose_time_threshold(raw_data, idx, time_threshold_list, purity_min):
+    best_time_threshold = None
+    best_yc2yc = -1
 
-def get_info_from_txt(txt_path):
-	with open(txt_path, "r", encoding="utf-8") as f:
-		lines = f.read().split()
+    for time_threshold in time_threshold_list:
+        yc2yc = 0  # 异常 -> 判异常
+        zc2yc = 0  # 正常 -> 判异常
 
-	result = [line.strip() for line in lines if line.strip()]
-	return result
+        for i in idx:
+            sample = raw_data[i]
+            L = len(sample["left_arm_angles"])
 
-def assess_sample(sample, min_angle_threshold, max_diff_threshold):
-    left_angles = np.array(sample['left_arm_angles'])
-    right_angles = np.array(sample['right_arm_angles'])
+            if L < time_threshold * 30:  # 判异常
+                if sample["total_label"] == 0:
+                    yc2yc += 1
+                else:
+                    zc2yc += 1
 
-    left_mean = np.mean(left_angles)
-    right_mean = np.mean(right_angles)
+        purity = yc2yc / (yc2yc + zc2yc + 1e-6)
+        if purity > purity_min and yc2yc > best_yc2yc:
+            best_yc2yc = yc2yc
+            best_time_threshold = time_threshold
 
-    # 1. 角度判断
-    if left_mean < min_angle_threshold or right_mean < min_angle_threshold:
-        return ("patient", "mean_angle<threshold")
-    
-    # 2. diff判断
-    # 对齐长度取最短的那一段
-    L = min(len(left_angles), len(right_angles))
-    diff = np.abs(left_angles[:L] - right_angles[:L])
-    diff_mean = np.mean(diff)
-    
-    if diff_mean > max_diff_threshold:
-        return ("patient", "mean_diff>threshold")
-    
-    return ("healthy",0)
+    return best_time_threshold
 
-def test_one_setting(data, class_1_all,
-                     min_angle_threshold,
-                     max_diff_threshold,
-                     verbose=False):
-    """
-    Stage1 规则在给定阈值下的评估
-    约定：
-        Positive = 正常
-        Negative = 异常
 
-        tp = 正常 → 判正常
-        fp = 异常 → 判正常
-        fn = 正常 → 判异常（致命）
-        tn = 异常 → 判异常
-    """
+def use_time_threshold(raw_data, idx, best_time_threshold):
+    yc2yc = 0
+    zc2yc = 0
+    idx_needed_angle = []
 
-    # --- 计数 ---
-    tp = 0  # 正常 → 判正常
-    fp = 0  # 异常 → 判正常
-    fn = 0  # 正常 → 判异常（致命）
-    tn = 0  # 异常 → 判异常
+    for i in idx:
+        sample = raw_data[i]
+        L = len(sample["left_arm_angles"])
 
-    class1_total = 0        # 明显异常总数
-    class1_detected = 0     # 被 Stage1 抓到的明显异常数
+        if L < best_time_threshold * 30:  # 判异常
+            if sample["total_label"] == 0:
+                yc2yc += 1
+            else:
+                zc2yc += 1
+        else:
+            idx_needed_angle.append(i)
 
-    for sample in data:
-        gt_is_normal = (sample["total_label"] == 1)
-        gt_is_abnormal = not gt_is_normal
+    return yc2yc, zc2yc, idx_needed_angle
 
-        is_class1 = sample["id"] in class_1_all
-        if is_class1:
-            class1_total += 1
 
-        status, reason = assess_sample(
-            sample,
-            min_angle_threshold=min_angle_threshold,
-            max_diff_threshold=max_diff_threshold
-        )
-
-        pred_is_abnormal = (status == "patient")
-        pred_is_normal = not pred_is_abnormal
-
-        # --- 混淆矩阵（严格按你的定义） ---
-        if gt_is_normal and pred_is_normal:
-            tp += 1
-        elif gt_is_abnormal and pred_is_normal:
-            fp += 1
-        elif gt_is_normal and pred_is_abnormal:
-            fn += 1
-        elif gt_is_abnormal and pred_is_abnormal:
-            tn += 1
-
-        # --- 明显异常检出 ---
-        if gt_is_abnormal and pred_is_abnormal and is_class1:
-            class1_detected += 1
-
-    # --- 指标 ---
-    class1_recall = (
-        class1_detected / class1_total
-        if class1_total > 0 else 0.0
-    )
-
-    # 被判“异常”的集合里，真正异常的比例
-    abnormal_purity = (
-        tn / (tn + fn)
-        if (tn + fn) > 0 else 0.0
-    )
-
-    # 正常被误杀的比例（系统红线）
-    false_kill_rate = (
-        fn / (fn + tp)
-        if (fn + tp) > 0 else 0.0
-    )
-
-    metrics = {
-        "class1_recall": class1_recall,
-        "abnormal_purity": abnormal_purity,
-        "false_kill_rate": false_kill_rate,
-        "tp": tp,
-        "fp": fp,
-        "fn": fn,
-        "tn": tn,
-    }
-
-    if verbose:
-        print(f"min_angle={min_angle_threshold}, max_diff={max_diff_threshold}")
-        print(f"  class1_recall      : {class1_recall:.4f}")
-        print(f"  abnormal_purity    : {abnormal_purity:.4f}")
-        print(f"  false_kill_rate    : {false_kill_rate:.4f}")
-        print(f"  TP={tp}, FP={fp}, FN={fn}, TN={tn}")
-
-    return metrics
-
-def stage1_train(idx, raw_data, cfg):
-    CLASS1_PATH = os.path.join(os.path.dirname(cfg.PROJECT_ROOT), cfg.PATH.CLASS1_PATH)
-    class_1_all = get_info_from_txt(CLASS1_PATH)
-
-    data = [raw_data[i] for i in idx]
-
-    min_angle_list = range(5, 60, 1)
-    max_diff_list  = range(0, 40, 1)
-
-    # ===== 可调超参数（系统级）=====
-    purity_min = cfg.STAGE1.PURITY_MIN   # 正常样本误杀容忍度
-    # ==============================
-
-    best_recall = -1
+# =====================================================
+# 2. 角度 & 左右差阈值选择
+# =====================================================
+def choose_angle_and_diff(raw_data, idx, min_angle_list, max_diff_list, purity_min):
     best_candidates = []
+    best_yc2yc = -1
 
     for min_angle in min_angle_list:
         for max_diff in max_diff_list:
-            metrics = test_one_setting(
-                data, class_1_all,
-                min_angle, max_diff,
-                verbose=False
-            )
+            yc2yc = 0
+            zc2yc = 0
 
-            purity = metrics["abnormal_purity"]
-            recall = metrics["class1_recall"]
+            for i in idx:
+                sample = raw_data[i]
+                gt = sample["total_label"]
 
-            # --- 核心筛选逻辑 ---
-            if purity >= purity_min:
-                if recall > best_recall:
-                    best_recall = recall
-                    best_candidates = [(min_angle, max_diff, metrics)]
-                elif recall == best_recall:
-                    best_candidates.append((min_angle, max_diff, metrics))
+                left = np.array(sample["left_arm_angles"])
+                right = np.array(sample["right_arm_angles"])
 
-    if not best_candidates:
-        raise RuntimeError(
-            f"No valid Stage1 params found with abnormal_purity >= {purity_min}"
-        )
+                if np.mean(left) < min_angle or np.mean(right) < min_angle:
+                    if gt == 0:
+                        yc2yc += 1
+                    else:
+                        zc2yc += 1
+                    continue
 
-    # 保守策略：min_angle 最大
-    best_params = max(best_candidates, key=lambda x: x[0])
-    min_angle, max_diff, metrics = best_params
+                L = min(len(left), len(right))
+                diff_mean = np.mean(np.abs(left[:L] - right[:L]))
 
-    print("====== 推荐 Stage1 阈值（高置信异常检测） ======")
-    print(f"min_angle_threshold = {min_angle}")
-    print(f"max_diff_threshold  = {max_diff}")
-    print(f"class1_recall       = {metrics['class1_recall']:.4f}")
-    print(f"abnormal_purity     = {metrics['abnormal_purity']:.4f}")
-    print(f"false_kill_rate     = {metrics['false_kill_rate']:.4f}")
-    print(f"TP={metrics['tp']} FP={metrics['fp']} FN={metrics['fn']} TN={metrics['tn']}")
+                if diff_mean > max_diff:
+                    if gt == 0:
+                        yc2yc += 1
+                    else:
+                        zc2yc += 1
 
-    # plot_stage1_tradeoff_scatter(
-    #     data,
-    #     class_1_all,
-    #     min_angle_list,
-    #     max_diff_list,
-    #     chosen_params=(min_angle, max_diff),
-    #     purity_threshold=purity_min,
-    #     save_path=os.path.join(cfg.PROJECT_ROOT, "stage1_tradeoff.png")
-    # )
+            purity = yc2yc / (yc2yc + zc2yc + 1e-6)
+            if purity > purity_min:
+                if yc2yc > best_yc2yc:
+                    best_yc2yc = yc2yc
+                    best_candidates = [(min_angle, max_diff)]
+                elif yc2yc == best_yc2yc:
+                    best_candidates.append((min_angle, max_diff))
 
-    return min_angle, max_diff, metrics
+    # 角度越大越保守
+    return max(best_candidates, key=lambda x: x[0])
 
-def stage1_test(idx, raw_data, best_params):
-    min_angle = best_params[0]
-    max_diff = best_params[1]
 
-    stage1_correct = 0
+def use_angle_threshold(raw_data, idx, best_angle_params):
+    min_angle, max_diff = best_angle_params
+
+    yc2yc = 0
+    zc2yc = 0
     idx_needed_net = []
-    for id in idx:
-        sample = raw_data[id]
-        status = assess_sample(sample, min_angle_threshold=min_angle, max_diff_threshold=max_diff)
-        if status[0] == "patient" and sample["total_label"] == 0:
-                stage1_correct += 1
-        if status[0] == "healthy":
-            idx_needed_net.append(id)
 
-    return stage1_correct, idx_needed_net
+    for i in idx:
+        sample = raw_data[i]
+        gt = sample["total_label"]
 
-import matplotlib.pyplot as plt
-import os
+        left = np.array(sample["left_arm_angles"])
+        right = np.array(sample["right_arm_angles"])
 
-def plot_stage1_tradeoff_scatter(
-    data,
-    class_1_all,
-    min_angle_list,
-    max_diff_list,
-    chosen_params=None,
-    purity_threshold=0.95,
-    save_path="stage1_tradeoff.png"
-):
-    """
-    可视化 Stage1 阈值选择的合理性：
-    x: class1_recall
-    y: abnormal_purity
-    """
+        if np.mean(left) < min_angle or np.mean(right) < min_angle:
+            if gt == 0:
+                yc2yc += 1
+            else:
+                zc2yc += 1
+            continue
 
-    recalls = []
-    purities = []
-    false_kills = []
+        L = min(len(left), len(right))
+        diff_mean = np.mean(np.abs(left[:L] - right[:L]))
 
-    records = []
+        if diff_mean > max_diff:
+            if gt == 0:
+                yc2yc += 1
+            else:
+                zc2yc += 1
+            continue
 
-    for min_angle in min_angle_list:
-        for max_diff in max_diff_list:
-            metrics = test_one_setting(
-                data,
-                class_1_all,
-                min_angle,
-                max_diff,
-                verbose=False
-            )
-            recalls.append(metrics["class1_recall"])
-            purities.append(metrics["abnormal_purity"])
-            false_kills.append(metrics["false_kill_rate"])
-            records.append((min_angle, max_diff, metrics))
+        idx_needed_net.append(i)
 
-    plt.figure(figsize=(8, 6))
+    return yc2yc, zc2yc, idx_needed_net
 
-    # --- 所有候选点 ---
-    sc = plt.scatter(
-        recalls,
-        purities,
-        c=false_kills,
-        cmap="viridis",
-        alpha=0.6,
-        s=25
+
+# =====================================================
+# 3. Stage1 训练（选阈值）
+# =====================================================
+def stage1_train(idx, raw_data, cfg, logger):
+    time_threshold_list = np.arange(2, 5, 0.1)
+    min_angle_list = range(0, 60)
+    max_diff_list = range(0, 40)
+
+    purity_min = cfg.STAGE1.PURITY_MIN
+
+    # --- 时间阈值 ---
+    best_time_threshold = choose_time_threshold(
+        raw_data, idx, time_threshold_list, purity_min
     )
-    cbar = plt.colorbar(sc)
-    cbar.set_label("False Kill Rate (Normal → Abnormal)")
-
-    # --- purity 阈值线 ---
-    plt.axhline(
-        y=purity_threshold,
-        color="red",
-        linestyle="--",
-        linewidth=2,
-        label=f"Purity ≥ {purity_threshold}"
+    t_yc2yc, t_zc2yc, idx_needed_angle = use_time_threshold(
+        raw_data, idx, best_time_threshold
     )
 
-    # --- 高亮最终选择 ---
-    if chosen_params is not None:
-        min_angle, max_diff = chosen_params
-        for ma, md, m in records:
-            if ma == min_angle and md == max_diff:
-                plt.scatter(
-                    m["class1_recall"],
-                    m["abnormal_purity"],
-                    s=120,
-                    c="red",
-                    edgecolors="black",
-                    marker="*",
-                    label=f"Chosen ({ma}, {md})"
-                )
-                break
+    # --- 角度阈值 ---
+    best_angle_params = choose_angle_and_diff(
+        raw_data, idx_needed_angle, min_angle_list, max_diff_list, purity_min
+    )
+    a_yc2yc, a_zc2yc, _ = use_angle_threshold(
+        raw_data, idx_needed_angle, best_angle_params
+    )
 
-    plt.xlabel("Class1 Recall (Obvious Abnormal Detection)")
-    plt.ylabel("Abnormal Purity (Precision of Stage1)")
-    plt.title("Stage1 Threshold Trade-off Analysis")
-    plt.legend()
-    plt.grid(alpha=0.3)
+    total_yc = sum(raw_data[i]["total_label"] == 0 for i in idx)
 
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    plt.savefig(save_path, dpi=300, bbox_inches="tight")
-    plt.close()
+    recall_yc = (t_yc2yc + a_yc2yc) / (total_yc + 1e-6)
+    purity = (t_yc2yc + a_yc2yc) / (
+        t_yc2yc + a_yc2yc + t_zc2yc + a_zc2yc + 1e-6
+    )
 
-    print(f"[OK] Stage1 trade-off plot saved to {save_path}")
+    logger.info("====== Stage1 高置信异常检测 ======")
+    logger.info(f"min_time_threshold  = {best_time_threshold}")
+    logger.info(f"min_angle_threshold = {best_angle_params[0]}")
+    logger.info(f"max_diff_threshold  = {best_angle_params[1]}")
+    logger.info(f"异常召回率 (Recall) = {recall_yc:.4f}")
+    logger.info(f"异常纯度 (Precision)= {purity:.4f}")
+    logger.info(f"Stage1 剔除异常数量 = {t_yc2yc + a_yc2yc}")
+
+    return best_time_threshold, best_angle_params
+
+
+# =====================================================
+# 4. Stage1 测试 / 推理
+# =====================================================
+def stage1_test(idx, raw_data, best_params):
+    best_time_threshold, best_angle_params = best_params
+
+    t_yc2yc, _, idx_needed_angle = use_time_threshold(
+        raw_data, idx, best_time_threshold
+    )
+    a_yc2yc, _, idx_needed_net = use_angle_threshold(
+        raw_data, idx_needed_angle, best_angle_params
+    )
+
+    return t_yc2yc + a_yc2yc, idx_needed_net
