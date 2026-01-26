@@ -8,7 +8,7 @@ __pycache__/
 # =========================
 # 日志文件
 # =========================
-aistroke/logs/
+logs/
 *.log
 
 # =========================
@@ -22,6 +22,7 @@ aistroke/logs/
 *.npz
 *.csv
 *.h5
+*.png
 descr.txt
 joints.json
 results.json

@@ -19,7 +19,6 @@ class LabelAngleDataset(Dataset):
 		self.data = [self.label_data[i] for i in self.indices]
 
 		# train 阶段是否使用增强
-		self.use_aug = (mode == "train")
 		self.modalities_used = [cfg.MODEL.MODALITIES_NAMES[i] for i in cfg.MODEL.MODALITIES_USED_IDX]
 
 	def __len__(self):
@@ -33,10 +32,21 @@ class LabelAngleDataset(Dataset):
 
 		feats = generate_feat(self.cfg, joints, self.device, self.modalities_used)
 
-		left_label = torch.tensor(sample["left_label"], dtype=torch.long)
-		right_label = torch.tensor(sample["right_label"], dtype=torch.long)
 		total_label = torch.tensor(sample["total_label"], dtype=torch.long)
-		return huanz_id, left_label, right_label, total_label, feats
+		if "left_label" in sample.keys():
+			left_label = torch.tensor(sample["left_label"], dtype=torch.long)
+		else:
+			left_label = None
+		if "right_label" in sample.keys():
+			right_label = torch.tensor(sample["right_label"], dtype=torch.long)
+		else:
+			right_label = None
+			
+		return {"huanz_id": huanz_id,
+		  "left_label": left_label,
+		  "right_label": right_label,
+		  "total_label": total_label,
+		  "modals": feats}
 	  
 class BucketBatchSampler(Sampler):
 	def __init__(self, dataset, batch_size, drop_last=False, shuffle=True):
@@ -45,10 +55,10 @@ class BucketBatchSampler(Sampler):
 		self.drop_last = drop_last
 		self.shuffle = shuffle
 
-		first_sample = dataset[0][4]
+		first_sample = dataset[0]["modals"]
 		self.first_modality = next(iter(first_sample.keys()))
-		# 用左臂角度序列长度做排序示例
-		self.lengths = [d[4][self.first_modality].shape[0] for d in dataset]
+		# 用第一个输入模态获取长度
+		self.lengths = [d["modals"][self.first_modality].shape[0] for d in dataset]
 		self.bins = np.argsort(self.lengths)
 
 	def __iter__(self):
@@ -73,11 +83,13 @@ class BucketBatchSampler(Sampler):
 			return (len(self.dataset) + self.batch_size - 1) // self.batch_size
 		
 def label_collate_fn(batch):
+	IGNORE_LABEL = -1
+
 	batch_size = len(batch)
-	sample_results = batch[0][4]
+	sample_results = batch[0]["modals"]
 	modalities = list(sample_results.keys())
 
-	max_len = max(b[4][modalities[0]].shape[0] for b in batch)
+	max_len = max(b["modals"][modalities[0]].shape[0] for b in batch)
 
 	batch_tensors = {}
 	for m in modalities:
@@ -85,41 +97,39 @@ def label_collate_fn(batch):
 		batch_shape = (batch_size, max_len, *s_shape)
 		batch_tensors[m] = torch.zeros(batch_shape, dtype=torch.float32)
 
-	left_labels, right_labels, all_labels = [], [], []
-	huanz_ids = []
+	huanz_ids, left_labels, right_labels, total_labels = [], [], [], []
 
 	for i, s in enumerate(batch):
-		seq_len = s[4][modalities[0]].shape[0]
+		seq_len = s["modals"][modalities[0]].shape[0]
 		for m in modalities:
-			batch_tensors[m][i, :seq_len, ...] = s[4][m]
+			batch_tensors[m][i, :seq_len, ...] = s["modals"][m]
 
-		huanz_ids.append(s[0])
-		left_labels.append(s[1])
-		right_labels.append(s[2])
-		all_labels.append(s[3])
+		huanz_ids.append(s["huanz_id"])
+		left_labels.append(s["left_label"] if s["left_label"] is not None else IGNORE_LABEL)
+		right_labels.append(s["right_label"] if s["right_label"] is not None else IGNORE_LABEL)
+		total_labels.append(s["total_label"])
 
-	return (
-		huanz_ids,
-		torch.tensor(left_labels, dtype=torch.long),
-		torch.tensor(right_labels, dtype=torch.long),
-		torch.tensor(all_labels, dtype=torch.long),
-		batch_tensors
-	)
+	return {"huanz_ids": huanz_ids,
+		 "left_labels": torch.tensor(left_labels, dtype=torch.long),
+		 "right_labels": torch.tensor(right_labels, dtype=torch.long),
+		 "total_labels": torch.tensor(total_labels, dtype=torch.long),
+		 "inputs": batch_tensors
+		 }
 
 def build_dataloaders(cfg, train_idx, val_idx, test_idx, raw_data, device):
 	train_loader = None
 	val_loader = None
 	test_loader = None
 		
-	if train_idx != []:
+	if len(train_idx) > 0:
 		train_dataset = LabelAngleDataset(cfg, "train", train_idx, raw_data, device)
 		train_sampler = BucketBatchSampler(train_dataset, batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=True)
 		train_loader = DataLoader(train_dataset, batch_sampler=train_sampler, collate_fn=label_collate_fn, pin_memory=True)
-	if val_idx != []:
+	if len(val_idx) > 0:
 		val_dataset = LabelAngleDataset(cfg, "val", val_idx, raw_data, device)
 		val_sampler = BucketBatchSampler(val_dataset, batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=False)
 		val_loader = DataLoader(val_dataset, batch_sampler=val_sampler, collate_fn=label_collate_fn, pin_memory=True)
-	if test_idx != []:
+	if len(test_idx) > 0:
 		test_dataset = LabelAngleDataset(cfg, "test", test_idx, raw_data, device)
 		test_sampler = BucketBatchSampler(test_dataset, batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=False)
 		test_loader = DataLoader(test_dataset, batch_sampler=test_sampler, collate_fn=label_collate_fn, pin_memory=True)

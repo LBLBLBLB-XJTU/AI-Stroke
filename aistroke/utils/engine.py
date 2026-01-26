@@ -5,8 +5,16 @@ from sklearn.metrics import (
     precision_score, recall_score, f1_score,
     roc_auc_score, confusion_matrix
 )
+from sklearn.exceptions import UndefinedMetricWarning
+import warnings
 
-from .visualisation_and_record import plot_confusion_matrix, plot_roc_curve, plot_pr_curve, save_error_records, save_upper_body_skeleton_3d_cam
+from .visualisation_and_record import plot_confusion_matrix, plot_roc_curve, plot_pr_curve, save_error_records
+
+def safe_val(x, idx):
+    return None if x is None else int(x[idx].item())
+
+def safe_prob(x, idx):
+    return None if x is None else float(x[idx].item())
 
 def run_one_epoch(
     net,
@@ -17,9 +25,6 @@ def run_one_epoch(
     mode="eval",
     save_dir=None
 ):
-    """
-    CosFace 训练 / 测试循环（支持 Skeleton Grad-CAM）
-    """
     is_train = (mode == "train" and optimizer is not None)
     collect_metrics = (mode == "test")
 
@@ -27,38 +32,36 @@ def run_one_epoch(
 
     # --- 统计指标 ---
     correct_final = correct_left = correct_right = 0
-    total_samples = 0
+    total_samples = total_left_samples = total_right_samples = 0
 
-    total_loss = total_loss_ce = total_loss_l2 = 0.0
-    total_loss_feat = total_loss_center = total_loss_triplet = 0.0
+    total_loss = total_loss_ce = total_loss_l2 = total_loss_center = 0.0
     batch_count = 0
 
     all_labels, all_preds, all_probs = [], [], []
     FP_records, FN_records = [], []
 
-    # Grad-CAM 只在 eval / test 用
-    # cam_extractor = UpperBodySkeletonGradCAM(net) if not is_train else None
-
     for batch_idx, batch in enumerate(data_loader):
-        huanz_ids = batch[0]
-        left_labels = batch[1].to(device)
-        right_labels = batch[2].to(device)
-        total_labels = batch[3].to(device)
-        inputs = {k: v.to(device) for k, v in batch[4].items()}
+        huanz_ids = batch["huanz_ids"]
+        left_labels = batch["left_labels"].to(device)
+        right_labels = batch["right_labels"].to(device)
+        total_labels = batch["total_labels"].to(device)
+        inputs = {k: v.to(device) for k, v in batch["inputs"].items()}
+        has_lr = (left_labels != -1).all() and (right_labels != -1).all()
 
         # ======================================================
         # 1️⃣ Forward（train: 有梯度；eval: 无梯度）
         # ======================================================
         with torch.enable_grad() if is_train else torch.no_grad():
-            feats, (logit_left, logit_right) = net(inputs)
+            feats, (logit_left, logit_right, logit_total) = net(inputs)
 
             loss_dict = criterion(
                 feats,
-                (logit_left, logit_right),
+                (logit_left, logit_right, logit_total),
                 left_labels,
                 right_labels,
                 total_labels,
-                model=net
+                has_lr,
+                model=net,
             )
 
         # ======================================================
@@ -71,44 +74,23 @@ def run_one_epoch(
             optimizer.step()
 
         # ======================================================
-        # 3️⃣ Grad-CAM（eval / test，单独 enable_grad）
-        # ======================================================
-        # if not is_train and save_dir is not None:
-        #     with torch.enable_grad():
-        #         cam_left = cam_extractor(inputs, side="left")
-        #         cam_right = cam_extractor(inputs, side="right")
-
-        #     # 只可视化 batch 中第一个样本
-        #     t_vis = inputs["joints"].shape[1] // 2
-        #     joints = inputs["joints"][0, t_vis].cpu().numpy()
-
-        #     vis_dir = os.path.join(save_dir, "cam_vis", str(huanz_ids[0]))
-        #     os.makedirs(vis_dir, exist_ok=True)
-
-        #     save_upper_body_skeleton_3d_cam(
-        #         joints_3d=joints,
-        #         cam=cam_left[0].cpu().numpy(),
-        #         save_path=os.path.join(vis_dir, "left_cam.png"),
-        #         title="Left branch Grad-CAM"
-        #     )
-        #     save_upper_body_skeleton_3d_cam(
-        #         joints_3d=joints,
-        #         cam=cam_right[0].cpu().numpy(),
-        #         save_path=os.path.join(vis_dir, "right_cam.png"),
-        #         title="Right branch Grad-CAM"
-        #     )
-
-        # ======================================================
         # 4️⃣ Prediction & metrics
         # ======================================================
-        left_pred = torch.argmax(logit_left, 1)
-        right_pred = torch.argmax(logit_right, 1)
-        final_pred = (left_pred & right_pred)
+        if has_lr:
+            left_pred = torch.argmax(logit_left, 1)
+            right_pred = torch.argmax(logit_right, 1)
+            final_pred = (left_pred & right_pred)
+        else:
+            left_pred = right_pred = None
+            final_pred = torch.argmax(logit_total, 1)
 
         bs = total_labels.numel()
+        if has_lr:
+            correct_left += (left_pred == left_labels).sum().item()
+            correct_right += (right_pred == right_labels).sum().item()
+            total_left_samples += bs
+            total_right_samples += bs
         correct_final += (final_pred == total_labels).sum().item()
-        correct_left += (left_pred == left_labels).sum().item()
-        correct_right += (right_pred == right_labels).sum().item()
         total_samples += bs
 
         total_loss += loss_dict["total_loss"].item()
@@ -124,9 +106,13 @@ def run_one_epoch(
             all_labels.append(total_labels.cpu())
             all_preds.append(final_pred.cpu())
 
-            left_prob = torch.softmax(logit_left, 1)[:, 1]
-            right_prob = torch.softmax(logit_right, 1)[:, 1]
-            final_prob = left_prob * right_prob
+            if has_lr:
+                left_prob = torch.softmax(logit_left, 1)[:, 1]
+                right_prob = torch.softmax(logit_right, 1)[:, 1]
+                final_prob = left_prob * right_prob
+            else:
+                left_prob = right_prob = None
+                final_prob = torch.softmax(logit_total, 1)[:, 1]
             all_probs.append(final_prob.cpu())
 
             # ---- 记录 FP / FN 详细信息 ----
@@ -136,29 +122,30 @@ def run_one_epoch(
             for idx in torch.where(FP_mask)[0]:
                 FP_records.append({
                     "huanz_id": huanz_ids[idx],
-                    "left_pred": int(left_pred[idx].item()),
-                    "right_pred": int(right_pred[idx].item()),
                     "final_pred": int(final_pred[idx].item()),
-                    "left_prob": float(left_prob[idx].item()),
-                    "right_prob": float(right_prob[idx].item()),
                     "final_prob": float(final_prob[idx].item()),
-                    "left_label": int(left_labels[idx].item()),
-                    "right_label": int(right_labels[idx].item()),
                     "total_label": int(total_labels[idx].item()),
-                })
 
+                    "left_pred": safe_val(left_pred, idx),
+                    "right_pred": safe_val(right_pred, idx),
+                    "left_prob": safe_prob(left_prob, idx),
+                    "right_prob": safe_prob(right_prob, idx),
+                    "left_label": safe_val(left_labels if has_lr else None, idx),
+                    "right_label": safe_val(right_labels if has_lr else None, idx),
+                })
             for idx in torch.where(FN_mask)[0]:
                 FN_records.append({
                     "huanz_id": huanz_ids[idx],
-                    "left_pred": int(left_pred[idx].item()),
-                    "right_pred": int(right_pred[idx].item()),
                     "final_pred": int(final_pred[idx].item()),
-                    "left_prob": float(left_prob[idx].item()),
-                    "right_prob": float(right_prob[idx].item()),
                     "final_prob": float(final_prob[idx].item()),
-                    "left_label": int(left_labels[idx].item()),
-                    "right_label": int(right_labels[idx].item()),
                     "total_label": int(total_labels[idx].item()),
+
+                    "left_pred": safe_val(left_pred, idx),
+                    "right_pred": safe_val(right_pred, idx),
+                    "left_prob": safe_prob(left_prob, idx),
+                    "right_prob": safe_prob(right_prob, idx),
+                    "left_label": safe_val(left_labels if has_lr else None, idx),
+                    "right_label": safe_val(right_labels if has_lr else None, idx),
                 })
 
     # ======================================================
@@ -169,15 +156,15 @@ def run_one_epoch(
 
     results = {
         "final_acc": correct_final / total_samples,
-        "left_acc": correct_left / total_samples,
-        "right_acc": correct_right / total_samples,
+        "left_acc": (correct_left / total_left_samples if total_left_samples > 0 else None),
+        "right_acc": (correct_right / total_right_samples if total_right_samples > 0 else None),
 
         "total_loss": total_loss / batch_count,
         "ce_loss": total_loss_ce / batch_count,
         "l2_reg_loss": total_loss_l2 / batch_count,
         "center_loss": total_loss_center / batch_count,
 
-        "stage2_correct": correct_final
+        "net_correct": correct_final
     }
 
     if collect_metrics:
@@ -185,12 +172,17 @@ def run_one_epoch(
         all_preds = torch.cat(all_preds).numpy()
         all_probs = np.concatenate(all_probs)
 
-        results.update({
-            "precision": precision_score(all_labels, all_preds),
-            "recall": recall_score(all_labels, all_preds),
-            "f1": f1_score(all_labels, all_preds),
-            "auc": roc_auc_score(all_labels, all_probs)
-        })
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UndefinedMetricWarning)
+            results.update({
+                "precision": precision_score(all_labels, all_preds, zero_division=0),
+                "recall": recall_score(all_labels, all_preds, zero_division=0),
+                "f1": f1_score(all_labels, all_preds, zero_division=0),
+                "auc": (
+                    roc_auc_score(all_labels, all_probs)
+                    if len(np.unique(all_labels)) > 1 else None
+                )
+            })
 
         # 绘图
         os.makedirs(save_dir, exist_ok=True)

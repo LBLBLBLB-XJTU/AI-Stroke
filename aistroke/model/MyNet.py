@@ -6,7 +6,6 @@ from .modules.SkeletonTokenizer import SkeletonTokenizer
 from .modules.CrossModalTokenFusion import CrossModalTokenFusion
 from .modules.TemporalModalAndPool import TemporalModelAndPool
 from .modules.QueryReadout import QueryReadout
-from .modules.AsymmetricDiffInteraction import AsymmetricDiffInteraction
 from .modules.LinearHead import LinearHead
 
 class MyNet(nn.Module):
@@ -22,9 +21,9 @@ class MyNet(nn.Module):
         self.num_heads = cfg.MODEL.NUM_HEADS
         self.max_T = cfg.MODEL.MAX_T
         # skeleton config
-        self.skeleton_name = cfg.MODEL.SKELETON_NAME
-        self.skel_in_channels = cfg.MODEL.SKELETON_CHANNELS
-        self.skel_num_joints = cfg.MODEL.SKELETON_NUM_JOINTS
+        self.skeleton_name = cfg.MODEL.SKELETON.SKELETON_NAME
+        self.skel_in_channels = cfg.MODEL.SKELETON.SKELETON_CHANNELS
+        self.skel_num_joints = cfg.MODEL.SKELETON.SKELETON_NUM_JOINTS
         # temporal config
         self.num_time_heads = cfg.MODEL.NUM_TIME_HEADS
 
@@ -77,12 +76,6 @@ class MyNet(nn.Module):
             num_heads=self.num_heads,
             drop=self.drop,
         )
-
-        self.asmmy_diff_interaction = AsymmetricDiffInteraction(
-            embed_dim=self.embed_dim,
-            hidden_dim=self.embed_dim, 
-            drop=self.drop,
-        )
         
         self.feat_norm = nn.LayerNorm(self.embed_dim)
         self.head_left = LinearHead(
@@ -91,6 +84,10 @@ class MyNet(nn.Module):
         )
         self.head_right = LinearHead(
             embed_dim=self.embed_dim,
+            num_classes=2, 
+        )
+        self.total_head = LinearHead(
+            embed_dim=self.embed_dim * 2,
             num_classes=2, 
         )
 
@@ -153,12 +150,12 @@ class MyNet(nn.Module):
         feat_left = q_feats[:, 0]
         feat_right = q_feats[:, 1]
 
-        feat_left, feat_right = self.asmmy_diff_interaction(feat_left, feat_right)
-
         feat_left = self.feat_norm(feat_left)
         feat_right = self.feat_norm(feat_right)
+        feat_total = torch.cat([feat_left, feat_right], dim=-1)
 
         logits_left = self.head_left(feat_left)
         logits_right = self.head_right(feat_right)
+        logits_total = self.total_head(feat_total)
 
-        return (feat_left, feat_right), (logits_left, logits_right)
+        return (feat_left, feat_right, feat_total), (logits_left, logits_right, feat_total)

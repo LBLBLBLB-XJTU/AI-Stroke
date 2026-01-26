@@ -4,9 +4,14 @@ import numpy as np
 
 mask = [0,7,8,9,10,11,12,13,14,15,16]
 
-def normalize_smpl_output_torch(joints, root_idx=0, head_idx=10, eps=1e-6):
+def normalize_smpl_output_torch(joints, cfg):
     B, J, C = joints.shape
     joints = joints.clone()
+
+    root_idx = cfg.MODEL.SKELETON.ROOTIDX
+    head_idx = cfg.MODEL.SKELETON.HEAD_IDX
+    left_shoulder_idx = cfg.MODEL.SKELETON.LEFT_SHOULDER_IDX
+    right_shoulder_idx = cfg.MODEL.SKELETON.RIGHT_SHOULDER_IDX
 
     # 平移：将 root 节点对齐到原点
     root = joints[:, root_idx:root_idx+1, :]
@@ -14,18 +19,18 @@ def normalize_smpl_output_torch(joints, root_idx=0, head_idx=10, eps=1e-6):
 
     # 缩放：用 root→head 的距离当单位长度
     vec = joints[:, head_idx, :] - joints[:, root_idx, :]
-    height = torch.norm(vec, dim=-1, keepdim=True).clamp(min=eps)
+    height = torch.norm(vec, dim=-1, keepdim=True).clamp(min=1e-6)
     joints = joints / height.view(B,1,1)
 
     # 旋转：旋转：对齐到上方向 Y 轴
     target_up = torch.tensor([0,1,0], dtype=joints.dtype, device=joints.device)
     v = joints[:, head_idx, :] - joints[:, root_idx, :]
-    v_norm = F.normalize(v + eps, dim=-1)
+    v_norm = F.normalize(v + 1e-6, dim=-1)
     target_up_expand = target_up.unsqueeze(0).expand(B,-1)
 
     axis = torch.cross(v_norm, target_up_expand, dim=-1)
     axis_norm = torch.norm(axis, dim=-1, keepdim=True)
-    valid = axis_norm[:,0] > eps
+    valid = axis_norm[:,0] > 1e-6
     axis_unit = torch.zeros_like(axis)
     axis_unit[valid] = axis[valid] / axis_norm[valid]
 
@@ -45,13 +50,13 @@ def normalize_smpl_output_torch(joints, root_idx=0, head_idx=10, eps=1e-6):
 
     # -------- 旋转：统一面向前方 (+Z) --------
     # 使用肩膀向量生成水平 forward
-    right = joints[:,11] - joints[:,14]  # 右肩 - 左肩
+    right = joints[:,right_shoulder_idx] - joints[:,left_shoulder_idx]  # 右肩 - 左肩
     up = torch.tensor([0,1,0], device=joints.device, dtype=joints.dtype).view(1,3).expand_as(right)
     forward = torch.cross(up, right, dim=-1)  # 水平向前
-    forward = F.normalize(forward + eps, dim=-1)
+    forward = F.normalize(forward + 1e-6, dim=-1)
     # 只取 XZ 投影
     forward_xz = forward[:, [0,2]]
-    forward_xz_norm = torch.norm(forward_xz, dim=-1, keepdim=True).clamp(min=eps)
+    forward_xz_norm = torch.norm(forward_xz, dim=-1, keepdim=True).clamp(min=1e-6)
     forward_xz = forward_xz / forward_xz_norm
     # 旋转角 theta 使 forward_xz 指向 +Z ([0,1])
     theta = torch.atan2(forward_xz[:,0], forward_xz[:,1])  # [B]
@@ -67,9 +72,17 @@ def normalize_smpl_output_torch(joints, root_idx=0, head_idx=10, eps=1e-6):
 
     return joints
 
-def compute_limbs_angle_batch(p1,p2,p3,p4,eps=1e-6):
-    line1 = p2 - p1
-    line2 = p3 - p4
+def compute_limbs_angle_batch(joints, cfg, side, eps=1e-6):
+    if side == "left":
+        start1 = joints[:, cfg.MODEL.SKELETON.LEFT_SHOULDER_IDX]
+        end1 = joints[:, cfg.MODEL.SKELETON.LEFT_WRIST_IDX]
+    else:
+        start1 = joints[:, cfg.MODEL.SKELETON.RIGHT_SHOULDER_IDX]
+        end1 = joints[:, cfg.MODEL.SKELETON.RIGHT_WRIST_IDX]
+    start2 = joints[:, cfg.MODEL.SKELETON.NECK_IDX]
+    end2 = joints[:, cfg.MODEL.SKELETON.ROOTIDX]
+    line1 = start1 - end1
+    line2 = start2 - end2
     norm1 = torch.norm(line1, dim=-1)
     norm2 = torch.norm(line2, dim=-1)
     line1_unit = line1 / (norm1[...,None] + eps)
@@ -85,23 +98,22 @@ def generate_feat(cfg, joints, device, modalities_used):
     T = joints.shape[0]
 
     # visualize_skeleton_3d(joints, "skeleton_before_norm.png")
-    joints_all = normalize_smpl_output_torch(joints.to(device))
+    joints_normed = normalize_smpl_output_torch(joints.to(device), cfg)
     # visualize_skeleton_3d(joints_all, "skeleton_after_norm.png")
 
     if "joints" in modalities_used:
-        joints_masked = joints_all[:, mask, :]
-        results["joints"] = joints_masked
+        results["joints"] = joints_normed
 
     if "left_arm_angle" in modalities_used:
-        results["left_arm_angle"] = compute_limbs_angle_batch(joints_all[:,11], joints_all[:,13], joints_all[:,11], joints_all[:,4])
+        results["left_arm_angle"] = compute_limbs_angle_batch(joints_normed, cfg, "left")
     if "right_arm_angle" in modalities_used:
-        results["right_arm_angle"] = compute_limbs_angle_batch(joints_all[:,14], joints_all[:,16], joints_all[:,14], joints_all[:,1])
+        results["left_arm_angle"] = compute_limbs_angle_batch(joints_normed, cfg, "right")
 
     if "diff" in modalities_used:
         if "left_arm_angle" not in results.keys():
-            results["left_arm_angle"] = compute_limbs_angle_batch(joints_all[:,11], joints_all[:,13], joints_all[:,11], joints_all[:,4])
+            results["left_arm_angle"] = compute_limbs_angle_batch(joints_normed, cfg, "left")
         if "right_arm_angle" not in results.keys():
-            results["right_arm_angle"] = compute_limbs_angle_batch(joints_all[:,14], joints_all[:,16], joints_all[:,14], joints_all[:,1])
+            results["right_arm_angle"] = compute_limbs_angle_batch(joints_normed, cfg, "right")
         results["diff"] = torch.abs(results["left_arm_angle"] - results["right_arm_angle"])
 
     # 检查所有第一维 T 是否一致
@@ -110,6 +122,7 @@ def generate_feat(cfg, joints, device, modalities_used):
 
     return results
 
+# TODO 未修改
 def visualize_skeleton_3d(joints, save_path, root_idx=0, head_idx=10, left_shoulder_idx=11, right_shoulder_idx=14, frame_idx=0):
     import numpy as np
     import matplotlib.pyplot as plt

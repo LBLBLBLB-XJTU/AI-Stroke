@@ -1,8 +1,6 @@
 
-def choose_segment(raw_data, cfg):
-    segment_option = cfg.DATA.SEGMENT
+def segment_mydata(raw_data, segment_option):
     new_raw_data = []
-    
     if segment_option == 0:
         for sample in raw_data:
             new_sample = {
@@ -42,3 +40,12 @@ def choose_segment(raw_data, cfg):
     else:
         raise ValueError(f"Unknown segment option: {segment_option}")
     return new_raw_data
+
+def choose_segment(raw_data, cfg):
+    segment_option = cfg.DATA.SEGMENT.SEGMENT_OPTION
+    dataset_name = cfg.DATA.DATASET_NAME
+    
+    if dataset_name == "MYDATA":
+        new_data = segment_mydata(raw_data, segment_option)
+    
+    return new_data

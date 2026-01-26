@@ -1,5 +1,4 @@
 import os
-import sys
 import time
 import joblib
 import numpy as np
@@ -8,23 +7,18 @@ from torch.utils.tensorboard import SummaryWriter
 from sklearn.model_selection import train_test_split
 from collections import Counter
 
-from config.config import parse_args
-from utils.seed import set_random_seed
-from utils.logger import setup_logger, log_scalars
-from utils.choose_segment import choose_segment
-from data.dataset import build_dataloaders
-from model.MyNet import MyNet
-from model.loss import Losses
-from utils.engine import run_one_epoch
-from stage1 import stage1_test, stage1_train
+from .configs.config import parse_args
+from .utils.seed import set_random_seed
+from .utils.logger import setup_logger, log_scalars
+from .utils.choose_segment import choose_segment
+from .model.rule_system import rule_system_train, rule_system_test
+from .dataset.dataset import build_dataloaders
+from .model.MyNet import MyNet
+from .model.loss import Losses
+from .utils.engine import run_one_epoch
 
-# 项目路径
-PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
-sys.path.append(PROJECT_ROOT)
-
-def main():
-    cfg = parse_args()
-    cfg.PROJECT_ROOT = PROJECT_ROOT
+def simple_train(args, PROJECT_ROOT):
+    cfg = parse_args(args, PROJECT_ROOT)
     set_random_seed(cfg.SEED_VALUE)
 
     device = torch.device(cfg.DEVICE)
@@ -39,14 +33,22 @@ def main():
     logger.info(f"配置：{cfg}")
 
     # 加载数据
-    raw_path = os.path.join(os.path.dirname(cfg.PROJECT_ROOT), cfg.PATH.DATA_PATH)
+    raw_path = os.path.join(cfg.PROJECT_ROOT, cfg.PATH.DATA_PATH)
     raw_data = joblib.load(raw_path)
-    raw_data = choose_segment(raw_data, cfg)
+    if cfg.DATA.SEGMENT.USE_SEGMENT:
+        raw_data = choose_segment(raw_data, cfg)
     labels = [d["total_label"] for d in raw_data]
+    counter = Counter(labels)
+    logger.info("类别分布：")
+    for k, v in counter.items():
+        logger.info(f"  label={k}: {v} 个样本")
 
-    # 简单划分 train/val/test (比如 70%/15%/15%)
+    # 简单划分 train/val/test
     train_val_idx, test_idx = train_test_split(
-        np.arange(len(labels)), test_size=cfg.SPLIT_RATIO[2] / sum(cfg.SPLIT_RATIO), stratify=labels, random_state=cfg.SEED_VALUE
+        np.arange(len(labels)), 
+        test_size=cfg.SPLIT_RATIO[2] / sum(cfg.SPLIT_RATIO), 
+        stratify=labels, 
+        random_state=cfg.SEED_VALUE
     )
     train_idx, val_idx = train_test_split(
         train_val_idx, test_size=cfg.SPLIT_RATIO[1] / (cfg.SPLIT_RATIO[0] + cfg.SPLIT_RATIO[1]),
@@ -54,21 +56,17 @@ def main():
         random_state=cfg.SEED_VALUE
     )
     logger.info(f"训练集样本数: {len(train_idx)}, 验证集样本数: {len(val_idx)}, 测试集样本数: {len(test_idx)}")
-    test_labels = [labels[i] for i in test_idx]
-    counter = Counter(test_labels)
-    logger.info("测试集类别分布：")
-    for k, v in counter.items():
-        logger.info(f"  label={k}: {v} 个样本")
 
-    best_params = stage1_train(train_val_idx, raw_data, cfg, logger)
-    logger.info(f"stage1参数选择：{best_params}")
+    use_rule = cfg.TRAIN.RULE_SYSTEM.USE_RULE_SYSTEM
+
+    if use_rule:
+        best_params = rule_system_train(train_val_idx, raw_data, cfg, logger)
+        logger.info(f"规则系统参数选择：{best_params}")
 
     train_loader, val_loader, test_loader = build_dataloaders(
         cfg,
-        # train_idx=train_idx,
-        train_idx=np.concatenate([train_idx, val_idx, test_idx]),
-        # val_idx=val_idx,
-        val_idx=np.concatenate([train_idx, val_idx, test_idx]),
+        train_idx=train_idx,
+        val_idx=val_idx,
         test_idx=[],
         raw_data=raw_data,
         device=device
@@ -126,12 +124,11 @@ def main():
     }, last_ckpt_path)
 
     writer.close()
-
-    # stage1测试
-    if cfg.USE_STAGE1:
-        stage1_correct, idx_needed_net= stage1_test(test_idx, raw_data, best_params)
+    
+    if use_rule:
+        rule_system_correct, idx_needed_net= rule_system_test(test_idx, raw_data, best_params)
     else:
-        stage1_correct = 0
+        rule_system_correct = 0
         idx_needed_net = test_idx
     train_loader, val_loader, test_loader = build_dataloaders(
 				cfg,
@@ -141,28 +138,22 @@ def main():
 				raw_data=raw_data,
 				device=device
 			)
-    
-    # 测试验证集最优模型
-    checkpoint = torch.load(ckpt_path, map_location=device)
-    net.load_state_dict(checkpoint["model_state_dict"])
-    test_results  = run_one_epoch(net, test_loader, device, criterion, mode="test", save_dir=log_dir)
-    stage2_correct = test_results["stage2_correct"]
-    final_acc = (stage1_correct + stage2_correct) / len(test_idx)
-    net_acc = test_results["final_acc"]
-    logger.info(f"全系统测试结果: {final_acc}")
-    logger.info(f"网络测试结果: {net_acc}")
-    log_scalars(None, logger, "Test", test_results, "final")
 
-    # 测试最后模型
-    last_ckpt = torch.load(last_ckpt_path, map_location=device)
-    net.load_state_dict(last_ckpt["model_state_dict"])
-    test_results  = run_one_epoch(net, test_loader, device, criterion, mode="test", save_dir=log_dir)
-    stage2_correct = test_results["stage2_correct"]
-    final_acc = (stage1_correct + stage2_correct) / len(test_idx)
-    net_acc = test_results["final_acc"]
-    logger.info(f"全系统测试结果(最后模型): {final_acc}")
-    logger.info(f"网络测试结果(最后模型): {net_acc}")
-    log_scalars(None, logger, "Test_Last_ckpt", test_results, "final")
+    checkpoints = [("Test", ckpt_path), ("Test_Last_ckpt", last_ckpt_path)]
 
-if __name__ == "__main__":
-    main()
+    for tag, path in checkpoints:
+        checkpoint = torch.load(path, map_location=device)
+        net.load_state_dict(checkpoint["model_state_dict"])
+        test_results = run_one_epoch(net, test_loader, device, criterion, mode="test", save_dir=log_dir)
+
+        net_correct = test_results["net_correct"]
+        net_acc = test_results["final_acc"]
+
+        if use_rule:
+            final_acc = (rule_system_correct + net_correct) / len(test_idx)
+            logger.info(f"{tag} 全系统测试结果: {final_acc:.4f}")
+            logger.info(f"{tag} 网络测试结果: {net_acc:.4f}")
+        else:
+            logger.info(f"{tag} 测试结果: {net_acc:.4f}")
+
+        log_scalars(None, logger, tag, test_results, "final")
