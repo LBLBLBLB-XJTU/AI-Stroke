@@ -7,7 +7,7 @@ from aistroke.CV_train import CV_train
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cfg', type=str, default='aistroke/configs/yamls/trspd.yaml', help='cfg file path')
+    parser.add_argument('--cfg', type=str, default='aistroke/configs/yamls/mydata.yaml', help='cfg file path')
     parser.add_argument('--gpu', type=str, default='0', help='gpu choosed')
     parser.add_argument("--mode", type=str, default="CV_train", help="running mode")
     args = parser.parse_args()

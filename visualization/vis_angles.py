@@ -39,9 +39,12 @@ def vis_mydata_angles():
 
     for idx, sample in enumerate(data):
         huanz_id = sample["id"]
-        left_angles_all = np.array(sample["left_arm_angles_all"])
-        right_angles_all = np.array(sample["right_arm_angles_all"])
+        left_angles_all = 180.0 - np.array(sample["left_arm_angles_all"])
+        right_angles_all = 180.0 - np.array(sample["right_arm_angles_all"])
         segments = sample["segment"]
+        total_label = sample["total_label"]
+        left_label = sample["left_label"]
+        right_label = sample["right_label"]
 
         T = len(left_angles_all)
         x = np.arange(T)
@@ -68,7 +71,7 @@ def vis_mydata_angles():
                          color=color, ha="center", va="bottom", fontsize=9)
 
         # ===== 3️⃣ 图像装饰 =====
-        plt.title(f"Sample {idx} Arm Angles with Segments")
+        plt.title(f"Sample {huanz_id}, total: {total_label}, left: {left_label}, right: {right_label}")
         plt.xlabel("Frame Index")
         plt.ylabel("Angle Value")
         plt.legend()
